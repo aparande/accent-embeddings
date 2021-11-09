@@ -59,5 +59,9 @@ def train(params: TrainingParams, model_params: TacotronParams):
         print(f"Loss: {report_loss / params.report_interval}")
         report_loss = 0
 
+      if iteration % params.save_interval == 0:
+        print(f"Saving Model")
+        torch.save(model.state_dict(), params.model_path)
+
     print(f"Finished Epoch {epoch} with average loss: {epoch_loss / len(train_loader)}")
-    torch.save(model.state_dict(), "tacoton.pth")
+    torch.save(model.state_dict(), params.model_path)

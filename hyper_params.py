@@ -9,6 +9,8 @@ class TrainingParams:
   grad_clip_thresh: float = 1.0
   batch_size:float = 4
   report_interval: int = 5
+  save_interval: int = 100
+  model_path: str = "tacotron.pth"
 
 @dataclass
 class TacotronParams:
