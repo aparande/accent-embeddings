@@ -1,3 +1,5 @@
+import os
+
 from tqdm import tqdm
 
 import torch
@@ -22,6 +24,10 @@ def train(params: TrainingParams, model_params: TacotronParams, data_params: Dat
   assert model_params.n_mel_channels == data_params.n_mel_channels, "MFCC output does not match data"
 
   model = Tacotron2(model_params)
+  if os.path.exists(params.model_path):
+    print("Loading pre-trained model")
+    model.load_state_dict(torch.load(params.model_path, map_location=torch.device('cpu')))
+
   optimizer = torch.optim.Adam(model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
 
   criterion = Tacotron2Loss()
