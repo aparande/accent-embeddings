@@ -9,6 +9,7 @@ from torchaudio.datasets import VCTK_092
 import torchaudio.transforms as transforms
 
 from text import text_to_sequence
+from hyper_params import DataParams
 
 # Loads environment variables
 load_dotenv()
@@ -23,8 +24,8 @@ class VCTK(Dataset):
     mfcc_num: How many MFCC coeffients to use for the waveforms
     path: From where to load the dataset (defaults to DATASET_PATH from the environment)
   """
-  def __init__(self, mfcc_num: int, path: str = DATASET_PATH):
-    self.mfcc_num = mfcc_num
+  def __init__(self, params: DataParams, path: str = DATASET_PATH):
+    self.mfcc_transform = transforms.MelSpectrogram(sample_rate=params.sample_rate, n_mels=params.n_mel_channels, f_min=params.fmin, f_max=params.fmax, win_length=params.win_length, hop_length=params.hop_length, n_fft=params.filter_length)
     self.vctk = VCTK_092(path, download=True)
     self._load_speaker_metadata()
 
@@ -60,7 +61,7 @@ class VCTK(Dataset):
     accent = self.accent_map[sample[3]]
     gender = self.gender_map[sample[3]]
     
-    mfcc = transforms.MFCC(sample_rate=sample[1], n_mfcc=self.mfcc_num)(sample[0])
+    mfcc = self.mfcc_transform(sample[0])
     text = torch.IntTensor(text_to_sequence(sample[2], ["english_cleaners"]))
 
     return mfcc.squeeze(0), text, *sample[3:], accent, gender

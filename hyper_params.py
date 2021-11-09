@@ -13,6 +13,16 @@ class TrainingParams:
   model_path: str = "tacotron.pth"
 
 @dataclass
+class DataParams:
+  filter_length: int = 2048
+  hop_length: int = 256
+  win_length: int = 1024
+  n_mel_channels: int = 80
+  fmin: float = 0.0
+  fmax: float = 8000.0
+  sample_rate: float = 48000
+
+@dataclass
 class TacotronParams:
   mask_padding:bool = True
   fp16_run:bool = False

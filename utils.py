@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 
-
 def get_mask_from_lengths(lengths):
   max_len = torch.max(lengths).item()
   dtype = torch.cuda.LongTensor if torch.cuda.is_available() else torch.LongTensor
@@ -15,3 +14,4 @@ def to_gpu(x):
   if torch.cuda.is_available():
       x = x.cuda(non_blocking=True)
   return torch.autograd.Variable(x)
+

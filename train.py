@@ -3,12 +3,12 @@ from tqdm import tqdm
 import torch
 from torch.utils.data import DataLoader, random_split
 
-from hyper_params import TrainingParams, TacotronParams
+from hyper_params import TrainingParams, TacotronParams, DataParams
 from data_utils import VCTK, TTSCollate
 from tacotron2 import Tacotron2, Tacotron2Loss
 
-def load_data(params: TrainingParams, n_frames_per_step: int, mfcc_num: int, val_size = 0.1):
-  dataset = VCTK(mfcc_num)
+def load_data(params: TrainingParams, data_params: DataParams, n_frames_per_step: int, val_size = 0.1):
+  dataset = VCTK(data_params)
   collate_fn = TTSCollate(n_frames_per_step)
 
   val_size = int(val_size * len(dataset))
@@ -18,13 +18,15 @@ def load_data(params: TrainingParams, n_frames_per_step: int, mfcc_num: int, val
   train_loader = DataLoader(train, shuffle=True, batch_size=params.batch_size, drop_last=True, collate_fn=collate_fn)
   return train_loader, val, collate_fn
 
-def train(params: TrainingParams, model_params: TacotronParams):
+def train(params: TrainingParams, model_params: TacotronParams, data_params: DataParams):
+  assert model_params.n_mel_channels == data_params.n_mel_channels, "MFCC output does not match data"
+
   model = Tacotron2(model_params)
   optimizer = torch.optim.Adam(model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
 
   criterion = Tacotron2Loss()
 
-  train_loader, valset, collate_fn = load_data(params, model_params.n_frames_per_step, model_params.n_mel_channels)
+  train_loader, valset, collate_fn = load_data(params, data_params, model_params.n_frames_per_step)
 
   iteration = 0
 
