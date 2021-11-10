@@ -20,7 +20,7 @@ def load_data(params: TrainingParams, data_params: DataParams, n_frames_per_step
   train_loader = DataLoader(train, shuffle=True, batch_size=params.batch_size, drop_last=True, collate_fn=collate_fn)
   return train_loader, val, collate_fn
 
-def train(params: TrainingParams, model_params: TacotronParams, data_params: DataParams):
+def train(params: TrainingParams, model_params: TacotronParams, data_params: DataParams, val_size=0.1):
   assert model_params.n_mel_channels == data_params.n_mel_channels, "MFCC output does not match data"
 
   model = Tacotron2(model_params)
@@ -32,7 +32,7 @@ def train(params: TrainingParams, model_params: TacotronParams, data_params: Dat
 
   criterion = Tacotron2Loss()
 
-  train_loader, valset, collate_fn = load_data(params, data_params, model_params.n_frames_per_step)
+  train_loader, valset, collate_fn = load_data(params, data_params, model_params.n_frames_per_step, val_size=val_size)
 
   iteration = 0
 
