@@ -61,7 +61,7 @@ class VCTK(Dataset):
     accent = self.accent_map[sample[3]]
     gender = self.gender_map[sample[3]]
     
-    mfcc = self.mfcc_transform(sample[0])
+    mfcc = torch.log(torch.clamp(self.mfcc_transform(sample[0]), min=1e-5))
     text = torch.IntTensor(text_to_sequence(sample[2], ["english_cleaners"]))
 
     return mfcc.squeeze(0), text, *sample[3:], accent, gender
