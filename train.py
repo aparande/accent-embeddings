@@ -20,6 +20,23 @@ def load_data(params: TrainingParams, data_params: DataParams, n_frames_per_step
   train_loader = DataLoader(train, shuffle=True, batch_size=params.batch_size, drop_last=True, collate_fn=collate_fn)
   return train_loader, val, collate_fn
 
+def validate(model, criterion, val_set, batch_size, collate_fn):
+  model.eval()
+  with torch.no_grad():
+    val_loader = DataLoader(val_set, batch_size, shuffle=False, collate_fn=collate_fn)
+
+    val_loss = 0.0
+    for i, batch in enumerate(tqdm(val_loader)):
+      x, y = model.parse_batch(batch)
+      y_pred = model(x)
+
+      loss = criterion(y_pred, y)
+      val_loss += loss.item()
+
+  model.train()
+  return val_loss / (i + 1)
+
+
 def train(params: TrainingParams, model_params: TacotronParams, data_params: DataParams, val_size=0.1):
   assert model_params.n_mel_channels == data_params.n_mel_channels, "MFCC output does not match data"
 
@@ -34,15 +51,14 @@ def train(params: TrainingParams, model_params: TacotronParams, data_params: Dat
 
   train_loader, valset, collate_fn = load_data(params, data_params, model_params.n_frames_per_step, val_size=val_size)
 
-  iteration = 0
-
   if torch.cuda.is_available():
     model = model.cuda()
 
-  model.train()
-
   iteration = 0
+  train_losses = []
+  val_losses = []
   for epoch in range(params.epochs):
+    model.train()
     print(f"Starting Epoch {epoch}")
     epoch_loss = 0
     report_loss = 0
@@ -71,5 +87,13 @@ def train(params: TrainingParams, model_params: TacotronParams, data_params: Dat
         print(f"Saving Model")
         torch.save(model.state_dict(), params.model_path)
 
-    print(f"Finished Epoch {epoch} with average loss: {epoch_loss / len(train_loader)}")
+    val_loss = validate(model, criterion, valset, params.batch_size, collate_fn)
+    train_loss = epoch_loss / len(train_loader)
+
+    train_losses.append(train_loss)
+    val_losses.append(val_loss)
+    print(f"Finished Epoch {epoch} with (train, val): {train_loss}, {val_loss}")
     torch.save(model.state_dict(), params.model_path)
+
+  return model, train_losses, val_losses
+
