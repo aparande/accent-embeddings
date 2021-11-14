@@ -37,19 +37,19 @@ def validate(model, criterion, val_set, batch_size, collate_fn):
   return val_loss / (i + 1)
 
 
-def train(params: TrainingParams, model_params: TacotronParams, data_params: DataParams, val_size=0.1):
+def train(params: TrainingParams, model_params: TacotronParams, data_params: DataParams, train_loader: DataLoader, val_set, collate_fn, model: Tacotron2=None, optimizer: torch.optim.Adam = None):
   assert model_params.n_mel_channels == data_params.n_mel_channels, "MFCC output does not match data"
 
-  model = Tacotron2(model_params)
-  if os.path.exists(params.model_path):
-    print("Loading pre-trained model")
-    model.load_state_dict(torch.load(params.model_path, map_location=torch.device('cpu')))
+  if model is None:
+    model = Tacotron2(model_params)
+    if os.path.exists(params.model_path):
+      print("Loading pre-trained model")
+      model.load_state_dict(torch.load(params.model_path, map_location=torch.device('cpu')))
 
-  optimizer = torch.optim.Adam(model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
+  if optimizer is None:
+    optimizer = torch.optim.Adam(model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
 
   criterion = Tacotron2Loss()
-
-  train_loader, valset, collate_fn = load_data(params, data_params, model_params.n_frames_per_step, val_size=val_size)
 
   if torch.cuda.is_available():
     model = model.cuda()
