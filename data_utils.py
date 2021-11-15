@@ -8,6 +8,7 @@ from torch.utils.data import Dataset
 import torchaudio
 from torchaudio.datasets import VCTK_092
 import torchaudio.transforms as transforms
+import librosa
 
 from text import text_to_sequence
 from hyper_params import DataParams
@@ -65,7 +66,7 @@ class VCTK(Dataset):
     mfcc = torch.log(torch.clamp(self.mfcc_transform(sample[0]), min=1e-5))
     text = torch.IntTensor(text_to_sequence(sample[2], ["english_cleaners"]))
 
-    return mfcc.squeeze(0), text, *sample[3:], accent, gender
+    return mfcc.squeeze(0), text, sample[3], sample[4], accent, gender
 
   def __len__(self) -> int:
     return len(self.vctk)
@@ -176,6 +177,9 @@ class VCTK_092_Speaker(Dataset):
   def __getitem__(self, n: int):
     utterance_id = self._sample_ids[n]
     waveform, sample_rate, transcript, speaker_id, utterance_id =  self._load_sample(self.speaker_id, utterance_id, self._mic_id)
+
+    _, idx = librosa.effects.trim(waveform.numpy()[0], top_db=35)
+    waveform = waveform[:, idx[0]:]
 
     mfcc = torch.log(torch.clamp(self.mfcc_transform(waveform), min=1e-5))
     text = torch.IntTensor(text_to_sequence(transcript, ["english_cleaners"]))

@@ -26,7 +26,7 @@ def validate(model, criterion, val_set, batch_size, collate_fn):
     val_loader = DataLoader(val_set, batch_size, shuffle=False, collate_fn=collate_fn)
 
     val_loss = 0.0
-    for i, batch in enumerate(tqdm(val_loader)):
+    for i, batch in enumerate(val_loader):
       x, y = model.parse_batch(batch)
       y_pred = model(x)
 
@@ -35,7 +35,6 @@ def validate(model, criterion, val_set, batch_size, collate_fn):
 
   model.train()
   return val_loss / (i + 1)
-
 
 def train(params: TrainingParams, model_params: TacotronParams, data_params: DataParams, train_loader: DataLoader, val_set, collate_fn, model: Tacotron2=None, optimizer: torch.optim.Adam = None):
   assert model_params.n_mel_channels == data_params.n_mel_channels, "MFCC output does not match data"
