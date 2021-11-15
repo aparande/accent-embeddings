@@ -184,7 +184,7 @@ class VCTK_092_Speaker(Dataset):
     mfcc = torch.log(torch.clamp(self.mfcc_transform(waveform), min=1e-5))
     text = torch.IntTensor(text_to_sequence(transcript, ["english_cleaners"]))
 
-    return mfcc.squeeze(0), text, speaker_id, utterance_id
+    return mfcc.squeeze(0), text, waveform.squeeze(0), speaker_id, utterance_id
 
   def __len__(self) -> int:
       return len(self._sample_ids)

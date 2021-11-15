@@ -6,11 +6,11 @@ import torch
 from torch.utils.data import DataLoader, random_split
 
 from hyper_params import TrainingParams, TacotronParams, DataParams
-from data_utils import VCTK, TTSCollate
+from data_utils import VCTK, TTSCollate, VCTK_092_Speaker
 from tacotron2 import Tacotron2, Tacotron2Loss
 
-def load_data(params: TrainingParams, data_params: DataParams, n_frames_per_step: int, val_size = 0.1):
-  dataset = VCTK(data_params)
+def load_data(speaker:str, params: TrainingParams, data_params: DataParams, n_frames_per_step: int, val_size = 0.1):
+  dataset = VCTK_092_Speaker(data_params, speaker)
   collate_fn = TTSCollate(n_frames_per_step)
 
   val_size = int(val_size * len(dataset))
@@ -86,7 +86,7 @@ def train(params: TrainingParams, model_params: TacotronParams, data_params: Dat
         print(f"Saving Model")
         torch.save(model.state_dict(), params.model_path)
 
-    val_loss = validate(model, criterion, valset, params.batch_size, collate_fn)
+    val_loss = validate(model, criterion, val_set, params.batch_size, collate_fn)
     train_loss = epoch_loss / len(train_loader)
 
     train_losses.append(train_loss)
@@ -94,5 +94,5 @@ def train(params: TrainingParams, model_params: TacotronParams, data_params: Dat
     print(f"Finished Epoch {epoch} with (train, val): {train_loss}, {val_loss}")
     torch.save(model.state_dict(), params.model_path)
 
-  return model, train_losses, val_losses
+  return model, optimizer, train_losses, val_losses
 
