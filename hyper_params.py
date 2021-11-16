@@ -24,6 +24,7 @@ class DataParams:
   fmax: float = 8000.0
   sample_rate: float = 48000
   speaker: str = None
+  silence_thresh: float = 35
 
 @dataclass
 class TacotronParams:
