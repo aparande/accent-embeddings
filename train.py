@@ -9,13 +9,17 @@ from hyper_params import TrainingParams, TacotronParams, DataParams
 from data_utils import VCTK, TTSCollate, VCTK_092_Speaker
 from tacotron2 import Tacotron2, Tacotron2Loss
 
-def load_data(speaker:str, params: TrainingParams, data_params: DataParams, n_frames_per_step: int, val_size = 0.1):
-  dataset = VCTK_092_Speaker(data_params, speaker)
+def load_data(params: TrainingParams, data_params: DataParams, n_frames_per_step: int):
+  if data_params.speaker is not None:
+    dataset = VCTK_092_Speaker(data_params, data_params.speaker)
+  else:
+    dataset = VCTK(data_params)
+
   collate_fn = TTSCollate(n_frames_per_step)
 
-  val_size = int(val_size * len(dataset))
+  val_size = int(params.val_size * len(dataset))
   train_size = len(dataset) - val_size
-  train, val = random_split(dataset, (train_size, val_size))
+  train, val = random_split(dataset, (train_size, val_size), generator=torch.Generator().manual_seed(params.random_seed))
 
   train_loader = DataLoader(train, shuffle=True, batch_size=params.batch_size, drop_last=True, collate_fn=collate_fn)
   return train_loader, val, collate_fn
@@ -36,7 +40,8 @@ def validate(model, criterion, val_set, batch_size, collate_fn):
   model.train()
   return val_loss / (i + 1)
 
-def train(params: TrainingParams, model_params: TacotronParams, data_params: DataParams, train_loader: DataLoader, val_set, collate_fn, model: Tacotron2=None, optimizer: torch.optim.Adam = None):
+def train(params: TrainingParams, model_params: TacotronParams, data_params: DataParams, 
+          train_loader: DataLoader, val_set, collate_fn, model: Tacotron2=None, optimizer: torch.optim.Adam = None):
   assert model_params.n_mel_channels == data_params.n_mel_channels, "MFCC output does not match data"
 
   if model is None:

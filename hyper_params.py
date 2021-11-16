@@ -11,6 +11,8 @@ class TrainingParams:
   report_interval: int = 5
   save_interval: int = 100
   model_path: str = "tacotron.pth"
+  random_seed: int = 42
+  val_size: float = 0.1
 
 @dataclass
 class DataParams:
@@ -21,6 +23,7 @@ class DataParams:
   fmin: float = 0.0
   fmax: float = 8000.0
   sample_rate: float = 48000
+  speaker: str = None
 
 @dataclass
 class TacotronParams:
