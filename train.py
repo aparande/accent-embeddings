@@ -1,22 +1,18 @@
-import os
-
-from tqdm import tqdm
-
+import os, sys
 import torch
+from tqdm import tqdm
 from torch.utils.data import DataLoader, random_split
+from data_utils import VCTK, VCTK_092_Speaker
+import wandb
 
-from hyper_params import TrainingParams, TacotronParams, DataParams
-from data_utils import VCTK, TTSCollate, VCTK_092_Speaker
-from tacotron2 import Tacotron2, Tacotron2Loss
-
-def load_data(params: TrainingParams, data_params: DataParams, n_frames_per_step: int):
+def load_data(params, data_params):
   if data_params.speaker is not None:
     dataset = VCTK_092_Speaker(data_params, data_params.speaker)
   else:
     dataset = VCTK(data_params)
 
-  collate_fn = TTSCollate(n_frames_per_step)
-
+  # TODO: Refactor collate_fn to accept data_params
+  collate_fn = data_params.collate_cls()
   val_size = int(params.val_size * len(dataset))
   train_size = len(dataset) - val_size
   train, val = random_split(dataset, (train_size, val_size), generator=torch.Generator().manual_seed(params.random_seed))
@@ -33,31 +29,29 @@ def validate(model, criterion, val_set, batch_size, collate_fn):
     for i, batch in enumerate(val_loader):
       x, y = model.parse_batch(batch)
       y_pred = model(x)
-
       loss = criterion(y_pred, y)
       val_loss += loss.item()
 
   model.train()
   return val_loss / (i + 1)
 
-def train(params: TrainingParams, model_params: TacotronParams, data_params: DataParams, 
-          train_loader: DataLoader, val_set, collate_fn, model: Tacotron2=None, optimizer: torch.optim.Adam = None):
-  assert model_params.n_mel_channels == data_params.n_mel_channels, "MFCC output does not match data"
+def train(params, model_params, data_params, train_loader, val_set, collate_fn, optimizer = None):
+  device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+  model = params.model_cls(model_params)
+  model.to(device)
 
-  if model is None:
-    model = Tacotron2(model_params)
-    if os.path.exists(params.model_path):
-      print("Loading pre-trained model")
-      model.load_state_dict(torch.load(params.model_path, map_location=torch.device('cpu')))
+  if params.wandb:
+    wandb.init(project=params.wandb)
+
+  # assert model_params.n_mel_channels == data_params.n_mel_channels, "MFCC output does not match data"
+  if os.path.exists(params.model_path):
+    print("Loading pre-trained model")
+    model.load_state_dict(torch.load(params.model_path, map_location=torch.device('cpu')))
 
   if optimizer is None:
     optimizer = torch.optim.Adam(model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
 
-  criterion = Tacotron2Loss()
-
-  if torch.cuda.is_available():
-    model = model.cuda()
-
+  criterion = params.loss_cls()
   iteration = 0
   train_losses = []
   val_losses = []
@@ -71,8 +65,8 @@ def train(params: TrainingParams, model_params: TacotronParams, data_params: Dat
 
       model.zero_grad()
       x, y = model.parse_batch(batch)
+      x, y = x.to(device), y.to(device)
       y_pred = model(x)
-
       loss = criterion(y_pred, y)
       loss.backward()
 
@@ -84,12 +78,22 @@ def train(params: TrainingParams, model_params: TacotronParams, data_params: Dat
       report_loss += loss.item()
 
       if iteration % params.report_interval == 0:
-        print(f"Loss: {report_loss / params.report_interval}")
+        report_loss = report_loss / params.report_interval
+        log_info = {
+          "step": iteration,
+          "epoch": epoch,
+          "memory": torch.cuda.max_memory_allocated(),
+          "loss": report_loss,
+        }
+        print(log_info)
         report_loss = 0
 
       if iteration % params.save_interval == 0:
         print(f"Saving Model")
         torch.save(model.state_dict(), params.model_path)
+
+      # del loss, x, y
+      # torch.cuda.empty_cache()
 
     val_loss = validate(model, criterion, val_set, params.batch_size, collate_fn)
     train_loss = epoch_loss / len(train_loader)
@@ -101,3 +105,15 @@ def train(params: TrainingParams, model_params: TacotronParams, data_params: Dat
 
   return model, optimizer, train_losses, val_losses
 
+def main():
+  task = sys.argv[1]
+  if task == "asr":
+    from configs.wav2vec_asr import TrainingParams, ModelParams, DataParams
+  elif task == "tts":
+    from configs.tacotron2 import TrainingParams, ModelParams, DataParams
+
+  train_loader, val, collate_fn = load_data(TrainingParams, DataParams)
+  train(TrainingParams, ModelParams, DataParams, train_loader, val, collate_fn)
+
+if __name__ == "__main__":
+  main()

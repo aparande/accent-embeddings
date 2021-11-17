@@ -7,7 +7,7 @@ from utils import to_gpu, get_mask_from_lengths
 
 class Tacotron2Loss(nn.Module):
 	def __init__(self):
-		super(Tacotron2Loss, self).__init__()
+		super().__init__()
 
 	def forward(self, model_output, targets):
 		mel_target, gate_target = targets[0], targets[1]
@@ -24,7 +24,7 @@ class Tacotron2Loss(nn.Module):
 
 class LinearNorm(torch.nn.Module):
 	def __init__(self, in_dim, out_dim, bias=True, w_init_gain='linear'):
-		super(LinearNorm, self).__init__()
+		super().__init__()
 		self.linear_layer = torch.nn.Linear(in_dim, out_dim, bias=bias)
 
 		torch.nn.init.xavier_uniform_(
@@ -38,7 +38,7 @@ class LinearNorm(torch.nn.Module):
 class ConvNorm(torch.nn.Module):
 	def __init__(self, in_channels, out_channels, kernel_size=1, stride=1,
 							 padding=None, dilation=1, bias=True, w_init_gain='linear'):
-		super(ConvNorm, self).__init__()
+		super().__init__()
 		if padding is None:
 				assert(kernel_size % 2 == 1)
 				padding = int(dilation * (kernel_size - 1) / 2)
@@ -57,7 +57,7 @@ class ConvNorm(torch.nn.Module):
 class LocationLayer(nn.Module):
     def __init__(self, attention_n_filters, attention_kernel_size,
                  attention_dim):
-        super(LocationLayer, self).__init__()
+        super().__init__()
         padding = int((attention_kernel_size - 1) / 2)
         self.location_conv = ConvNorm(2, attention_n_filters,
                                       kernel_size=attention_kernel_size,
@@ -76,7 +76,7 @@ class LocationLayer(nn.Module):
 class Attention(nn.Module):
     def __init__(self, attention_rnn_dim, embedding_dim, attention_dim,
                  attention_location_n_filters, attention_location_kernel_size):
-        super(Attention, self).__init__()
+        super().__init__()
         self.query_layer = LinearNorm(attention_rnn_dim, attention_dim,
                                       bias=False, w_init_gain='tanh')
         self.memory_layer = LinearNorm(embedding_dim, attention_dim, bias=False,
@@ -135,7 +135,7 @@ class Attention(nn.Module):
 
 class Prenet(nn.Module):
     def __init__(self, in_dim, sizes):
-        super(Prenet, self).__init__()
+        super().__init__()
         in_sizes = [in_dim] + sizes[:-1]
         self.layers = nn.ModuleList(
             [LinearNorm(in_size, out_size, bias=False)
@@ -153,7 +153,7 @@ class Postnet(nn.Module):
     """
 
     def __init__(self, hparams):
-        super(Postnet, self).__init__()
+        super().__init__()
         self.convolutions = nn.ModuleList()
 
         self.convolutions.append(
@@ -199,7 +199,7 @@ class Encoder(nn.Module):
         - Bidirectional LSTM
     """
     def __init__(self, hparams):
-        super(Encoder, self).__init__()
+        super().__init__()
 
         convolutions = []
         for _ in range(hparams.encoder_n_convolutions):
@@ -250,7 +250,7 @@ class Encoder(nn.Module):
 
 class Decoder(nn.Module):
     def __init__(self, hparams):
-        super(Decoder, self).__init__()
+        super().__init__()
         self.n_mel_channels = hparams.n_mel_channels
         self.n_frames_per_step = hparams.n_frames_per_step
         self.encoder_embedding_dim = hparams.encoder_embedding_dim
@@ -503,7 +503,7 @@ class Decoder(nn.Module):
 
 class Tacotron2(nn.Module):
     def __init__(self, hparams):
-        super(Tacotron2, self).__init__()
+        super().__init__()
         self.mask_padding = hparams.mask_padding
         self.fp16_run = hparams.fp16_run
         self.n_mel_channels = hparams.n_mel_channels
