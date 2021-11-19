@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from text import symbols
+import hashlib
 
 @dataclass
 class TrainingParams:
@@ -25,6 +26,21 @@ class DataParams:
   sample_rate: float = 48000
   speaker: str = None
   silence_thresh: float = 35
+
+  def wav_hash(self):
+    return hashlib.md5(f"{self.sample_rate}-{self.silence_thresh}").hexdigest()
+
+  def mfcc_hash(self):
+    m = hashlib.md5()
+    m.update(str(self.filter_length))
+    m.update(str(self.hop_length))
+    m.update(str(self.win_length))
+    m.update(str(self.n_mel_channels))
+    m.update(str(self.fmax))
+    m.update(str(self.fmin))
+    m.update(str(self.sample_rate))
+    m.update(str(self.silence_thresh))
+    return m.hexdigest()
 
 @dataclass
 class TacotronParams:
