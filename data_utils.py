@@ -5,7 +5,7 @@ Helper classes for manipulating and loading
 import os
 import json
 import pickle
-from typing import Tuple, Any
+from typing import Tuple, Any, Dict
 
 from dotenv import load_dotenv
 import torch
@@ -13,6 +13,7 @@ from torch.utils.data import Dataset
 import torchaudio
 from torchaudio import transforms
 import librosa
+from tqdm import tqdm
 
 from text import text_to_sequence
 from hyper_params import DataParams
@@ -27,10 +28,14 @@ class VCTK(Dataset):
   A base class for VCTK based datasets.
   Based on VCTK_092 from https://pytorch.org/audio/stable/_modules/torchaudio/datasets/vctk.html
   """
-  def __init__(self, params: DataParams, root: str = DATASET_PATH, mic_id: str = "mic2", audio_ext: str = ".flac"):
+  def __init__(self, params: DataParams, precompute_features: bool = True, root: str = DATASET_PATH, mic_id: str = "mic2", audio_ext: str = ".flac"):
     self.mfcc_transform = transforms.MelSpectrogram(sample_rate=params.sample_rate, n_mels=params.n_mel_channels,
                                                     f_min=params.fmin, f_max=params.fmax, win_length=params.win_length,
                                                     hop_length=params.hop_length, n_fft=params.filter_length)
+
+    self.resample_transform = transforms.Resample(orig_freq=48000, new_freq=params.sample_rate)
+    self.precompute_features = precompute_features
+
     self.params = params
 
     if mic_id not in ["mic1", "mic2"]:
@@ -38,7 +43,12 @@ class VCTK(Dataset):
 
     self._path = os.path.join(root, "VCTK-Corpus-0.92")
     self._txt_dir = os.path.join(self._path, "txt")
-    self._audio_dir = os.path.join(self._path, "wav48_silence_trimmed")
+
+    self._orig_audio_dir = os.path.join(self._path, "wav48_silence_trimmed")
+
+    sr_int = int(self.params.sample_rate / 1000)
+    self._audio_dir = os.path.join(self._path, f"wav{sr_int}")
+    self._mfcc_dir = os.path.join(self._path, "mfcc")
     self._mic_id = mic_id
     self._audio_ext = audio_ext
 
@@ -55,12 +65,76 @@ class VCTK(Dataset):
       utterance_dir = os.path.join(self._txt_dir, speaker_id)
       for utterance_file in sorted(f for f in os.listdir(utterance_dir) if f.endswith(".txt")):
         utterance_id = os.path.splitext(utterance_file)[0]
-        audio_path_mic = os.path.join(self._audio_dir, speaker_id, f"{utterance_id}_{mic_id}{self._audio_ext}")
+        audio_path_mic = os.path.join(self._orig_audio_dir, speaker_id, f"{utterance_id}_{mic_id}{self._audio_ext}")
         if speaker_id == "p362" and not os.path.isfile(audio_path_mic):
           continue
         self._sample_ids.append(utterance_id.split("_"))
 
     self._load_speaker_metadata()
+
+    if precompute_features:
+      self._precompute()
+
+  def _precompute(self) -> None:
+    if not os.path.exists(self._audio_dir):
+      os.mkdir(self._audio_dir)
+    if not os.path.exists(self._mfcc_dir):
+      os.mkdir(self._mfcc_dir)
+
+    audio_hash_path = f"{self._audio_dir}/hash.txt"
+    mfcc_hash_path = f"{self._mfcc_dir}/hash.txt"
+    save_audio = True
+    save_mfcc = True
+    if os.path.isfile(audio_hash_path):
+      with open(audio_hash_path, 'r') as f:
+        save_audio = f.readline() != self.params.wav_hash()
+      if save_audio:
+        print("WARNING: OVERWRITING OLD PRECOMPUTED WAVEFORMS")
+
+    if os.path.exists(mfcc_hash_path):
+      with open(mfcc_hash_path, 'r') as f:
+        save_mfcc = f.readline() != self.params.mfcc_hash()
+      if save_mfcc:
+        print("WARNING: OVERWRITING OLD PRECOMPUTED MFCCS")
+
+    if not save_mfcc and not save_audio:
+      return
+
+    for speaker_id, utterance_id in tqdm(self._sample_ids):
+      wav_path = os.path.join(self._audio_dir, speaker_id)
+      mfcc_path = os.path.join(self._mfcc_dir, speaker_id)
+
+      waveform, _ = self._load_original_sample(speaker_id, utterance_id)
+      if save_audio:
+        waveform = self._process_waveform(waveform)
+      if save_mfcc:
+        mfcc = self._process_mfcc(waveform)
+
+      if not os.path.exists(wav_path):
+        os.mkdir(wav_path)
+      if not os.path.exists(mfcc_path): 
+        os.mkdir(mfcc_path)
+
+      if save_audio:
+        torch.save(waveform, f"{wav_path}/{speaker_id}_{utterance_id}.pt")
+      if save_mfcc:
+        torch.save(mfcc, f"{mfcc_path}/{speaker_id}_{utterance_id}.pt")
+
+    print("Done precomputing data")
+    with open(audio_hash_path, 'w') as f:
+      f.write(self.params.wav_hash())
+    with open(mfcc_hash_path, 'w') as f:
+      f.write(self.params.mfcc_hash())
+
+  def _process_waveform(self, waveform: torch.Tensor) -> torch.Tensor:
+    if self.params.sample_rate != 48000:
+      waveform = self.resample_transform(waveform)
+
+    _, idx = librosa.effects.trim(waveform.numpy()[0], top_db=self.params.silence_thresh)
+    return waveform[:, idx[0]:]
+
+  def _process_mfcc(self, waveform: torch.Tensor) -> torch.Tensor:
+    return torch.log(torch.clamp(self.mfcc_transform(waveform), min=1e-5))
 
   def _load_text(self, file_path: str) -> str:
     with open(file_path) as f:
@@ -90,26 +164,41 @@ class VCTK(Dataset):
       with open(gender_path, 'w') as f:
         json.dump(self.gender_map, f)
 
-  def _load_sample(self, speaker_id: str, utterance_id: str) -> Tuple[torch.Tensor, int, str]:
+  def _load_original_sample(self, speaker_id: str, utterance_id: str) -> Tuple[torch.Tensor, str]:
     transcript_path = os.path.join(self._txt_dir, speaker_id, f"{speaker_id}_{utterance_id}.txt")
-    audio_path = os.path.join(self._audio_dir, speaker_id, f"{speaker_id}_{utterance_id}_{self._mic_id}{self._audio_ext}")
+    audio_path = os.path.join(self._orig_audio_dir, speaker_id, f"{speaker_id}_{utterance_id}_{self._mic_id}{self._audio_ext}")
 
     transcript = self._load_text(transcript_path)
-    waveform, sample_rate = self._load_audio(audio_path)
+    waveform, _ = self._load_audio(audio_path)
 
-    return waveform, sample_rate, transcript
+    return waveform, transcript
 
-  def __getitem__(self, n: int) -> dict[str: Any]:
+  def _load_sample(self, speaker_id: str, utterance_id: str) -> Tuple[torch.Tensor, torch.Tensor, str]:
+    if self.precompute_features:
+      transcript_path = os.path.join(self._txt_dir, speaker_id, f"{speaker_id}_{utterance_id}.txt")
+      transcript = self._load_text(transcript_path)
+
+      wav_path = os.path.join(self._audio_dir, speaker_id, f"{speaker_id}_{utterance_id}.pt")
+      waveform = torch.load(wav_path)
+
+      mfcc_path = os.path.join(self._mfcc_dir, speaker_id, f"{speaker_id}_{utterance_id}.pt")
+      mfcc = torch.load(mfcc_path)
+    else:
+      waveform, transcript = self._load_original_sample(speaker_id, utterance_id)
+      _, idx = librosa.effects.trim(waveform.numpy()[0], top_db=self.params.silence_thresh)
+      waveform = waveform[:, idx[0]:]
+      mfcc = torch.log(torch.clamp(self.mfcc_transform(waveform), min=1e-5))
+
+    return waveform, mfcc, transcript
+
+
+  def __getitem__(self, n: int) -> Dict[str, Any]:
     speaker_id, utterance_id = self._sample_ids[n]
-    waveform, sample_rate, transcript = self._load_sample(speaker_id, utterance_id)
+    waveform, mfcc, transcript = self._load_sample(speaker_id, utterance_id)
 
     accent = self.accent_map[speaker_id]
     gender = self.gender_map[speaker_id]
 
-    _, idx = librosa.effects.trim(waveform.numpy()[0], top_db=self.params.silence_thresh)
-    waveform = waveform[:, idx[0]:]
-
-    mfcc = torch.log(torch.clamp(self.mfcc_transform(waveform), min=1e-5))
     text = torch.IntTensor(text_to_sequence(transcript, ["english_cleaners"]))
 
     return {
@@ -131,7 +220,7 @@ class VCTKSanity(VCTK):
   def __init__(self, root: str = "."):
     self._samples = pickle.load(open(f"{root}/data/vctk_sanity.pkl", "rb"))
 
-  def __getitem__(self, n: int) -> dict[str: Any]:
+  def __getitem__(self, n: int) -> Dict[str, Any]:
     return self._samples[n]
 
   def __len__(self) -> int:
