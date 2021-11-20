@@ -5,7 +5,7 @@ Helper classes for manipulating and loading
 import os
 import json
 import pickle
-from typing import Tuple, Any
+from typing import Tuple, Any, Dict
 
 from dotenv import load_dotenv
 import torch
@@ -87,7 +87,7 @@ class VCTK(Dataset):
     save_mfcc = True
     if os.path.isfile(audio_hash_path):
       with open(audio_hash_path, 'r') as f:
-        save_audio = f.readline() != self.params.audio_hash()
+        save_audio = f.readline() != self.params.wav_hash()
       if save_audio:
         print("WARNING: OVERWRITING OLD PRECOMPUTED WAVEFORMS")
 
@@ -116,13 +116,13 @@ class VCTK(Dataset):
         os.mkdir(mfcc_path)
 
       if save_audio:
-        torch.save(f"{wav_path}/{speaker_id}_{utterance_id}.pt", waveform)
+        torch.save(waveform, f"{wav_path}/{speaker_id}_{utterance_id}.pt")
       if save_mfcc:
-        torch.save(f"{mfcc_path}/{speaker_id}_{utterance_id}.pt", mfcc)
+        torch.save(mfcc, f"{mfcc_path}/{speaker_id}_{utterance_id}.pt")
 
     print("Done precomputing data")
     with open(audio_hash_path, 'w') as f:
-      f.write(self.params.audio_hash())
+      f.write(self.params.wav_hash())
     with open(mfcc_hash_path, 'w') as f:
       f.write(self.params.mfcc_hash())
 
@@ -192,7 +192,7 @@ class VCTK(Dataset):
     return waveform, mfcc, transcript
 
 
-  def __getitem__(self, n: int) -> dict[str: Any]:
+  def __getitem__(self, n: int) -> Dict[str, Any]:
     speaker_id, utterance_id = self._sample_ids[n]
     waveform, mfcc, transcript = self._load_sample(speaker_id, utterance_id)
 
@@ -220,7 +220,7 @@ class VCTKSanity(VCTK):
   def __init__(self, root: str = "."):
     self._samples = pickle.load(open(f"{root}/data/vctk_sanity.pkl", "rb"))
 
-  def __getitem__(self, n: int) -> dict[str: Any]:
+  def __getitem__(self, n: int) -> Dict[str, Any]:
     return self._samples[n]
 
   def __len__(self) -> int:
