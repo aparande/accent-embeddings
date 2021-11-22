@@ -215,17 +215,6 @@ class VCTK(Dataset):
   def __len__(self) -> int:
     return len(self._sample_ids)
 
-class VCTKSanity(VCTK):
-
-  def __init__(self, root: str = "."):
-    self._samples = pickle.load(open(f"{root}/data/vctk_sanity.pkl", "rb"))
-
-  def __getitem__(self, n: int) -> Dict[str, Any]:
-    return self._samples[n]
-
-  def __len__(self) -> int:
-    return len(self._samples)
-
 class TTSCollate():
   """
   Based on TextMelCollate from https://github.com/NVIDIA/tacotron2/blob/master/data_utils.py
