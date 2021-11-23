@@ -80,6 +80,9 @@ class TacotronParams:
   postnet_kernel_size:int = 5
   postnet_n_convolutions:int = 5
 
+  # Accent Embedding Params
+  accent_embed_dim: int = 5 # Must match with out_dim of MultiTaskParams
+
 @dataclass
 class MultiTaskParams:
   in_dim: int = 1

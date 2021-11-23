@@ -31,7 +31,8 @@ def validate(model, criterion, val_set, batch_size, collate_fn):
 
     val_loss = 0.0
     for i, batch in enumerate(val_loader):
-      x, y = model.parse_batch(batch)
+      x = model.parse_batch(batch)
+      targets = model.get_targets(batch)
       y_pred = model(x)
 
       loss = criterion(y_pred, y)
@@ -70,8 +71,9 @@ def train(params: TrainingParams, model_params: TacotronParams, data_params: Dat
       iteration += 1
 
       model.zero_grad()
-      x, y = model.parse_batch(batch)
-      y_pred = model(x)
+      x = model.parse_batch(batch, train=True)
+      y = model.get_targets(batch)
+      y_pred = model.train_step(x)
 
       loss = criterion(y_pred, y)
       loss.backward()
