@@ -254,5 +254,11 @@ class TTSCollate():
       gate_padded[i, mel.size(1)-1:] = 1
       output_lengths[i] = mel.size(1)
 
-    return text_padded, input_lengths, mel_padded, gate_padded, output_lengths
+    return {
+      "text": text_padded,
+      "text_lens": input_lengths,
+      "mfcc": mel_padded
+      "gates": gate_padded,
+      "mfcc_lens": output_lengths
+    }
 
