@@ -60,7 +60,7 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
     outs = dict()
     for task in self.tasks:
       x = task.model.parse_batch(inputs)
-      outs[task.name] = task.model(x, accent_embed)
+      outs[task.name] = task.model(x, accent_embed, wav2vec_feats)
 
     return outs
 
@@ -72,7 +72,6 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
     for task in self.tasks:
       x = task.model.parse_batch(batch, train=True)
       y_pred = task.model.training_step(x, accent_embed)
-
       targets = task.model.get_targets(batch)
 
       loss_vals.append(task.loss(y_pred, targets))

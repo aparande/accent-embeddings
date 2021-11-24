@@ -9,12 +9,12 @@ class TrainingParams:
   learning_rate: float = 1e-3
   weight_decay: float = 1e-6
   grad_clip_thresh: float = 1.0
-  batch_size:float = 4
+  batch_size: float = 16
   report_interval: int = 5
   save_interval: int = 100
-  model_path: str = "tacotron.pth"
   random_seed: int = 42
   val_size: float = 0.1
+  model_path: str = "tacotron.pth"
 
 @dataclass
 class DataParams:
@@ -24,9 +24,12 @@ class DataParams:
   n_mel_channels: int = 80
   fmin: float = 0.0
   fmax: float = 8000.0
-  sample_rate: float = 48000
+  # sample_rate: float = 48000
+  orig_rate: float = 48000
+  sample_rate: float = 16000
   speaker: str = None
   silence_thresh: float = 35
+  max_sec: int = 4
 
   def wav_hash(self):
     return hashlib.md5(f"{self.sample_rate}-{self.silence_thresh}".encode('utf-8')).hexdigest()
