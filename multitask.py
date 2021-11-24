@@ -26,6 +26,7 @@ class Bottleneck(nn.Module):
     self.layers.append(nn.Linear(hidden_dim[-1], out_dim))
 
   def forward(self, x):
+    x = torch.mean(x, 1)
     for i, layer in enumerate(self.layers):
       z = layer(x)
       x = F.relu(z) if i != len(self.layers) - 1 else z
@@ -49,8 +50,8 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
   def get_wav2vec_features(self, batch):
     waveforms = batch["waveform"]
     features = self.processor(waveforms, sampling_rate=16000, return_tensors = 'pt')
-    outputs = self.wav2vec_model(**features).last_hidden_state
-    return torch.mean(outputs, 1)
+    outputs = self.wav2vec_model(**features)
+    return outputs[0]
 
   def forward(self, inputs):
     wav2vec_feats = self.get_wav2vec_features(inputs)
@@ -59,7 +60,7 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
     outs = dict()
     for task in self.tasks:
       x = task.model.parse_batch(inputs)
-      outs[task.name] = task.model(x, accent_embed)
+      outs[task.name] = task.model(x, accent_embed, wav2vec_feats)
 
     return outs
 
@@ -70,7 +71,7 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
     loss_vals = []
     for task in self.tasks:
       x = task.model.parse_batch(batch, train=True)
-      y_pred = task.model.train_step(x, accent_embed)
+      y_pred = task.model.train_step(x, accent_embed, wav2vec_feats)
 
       targets = task.model.get_targets(batch)
 
