@@ -5,9 +5,7 @@ Helper classes for manipulating and loading
 import os
 import json
 import pickle
-from typing import Tuple, Any, Dict
-
-from dotenv import load_dotenv
+from typing import Tuple, Any, Dict, Optional, Union, List
 import torch
 from torch.utils.data import Dataset
 import torchaudio
@@ -15,11 +13,9 @@ from torchaudio import transforms
 import librosa
 from tqdm import tqdm
 
+from transformers import Wav2Vec2Processor
 from text import text_to_sequence
 from hyper_params import DataParams
-
-# Loads environment variables
-load_dotenv()
 
 DATASET_PATH = os.environ['DATASET_PATH']
 
@@ -28,12 +24,12 @@ class VCTK(Dataset):
   A base class for VCTK based datasets.
   Based on VCTK_092 from https://pytorch.org/audio/stable/_modules/torchaudio/datasets/vctk.html
   """
-  def __init__(self, params: DataParams, precompute_features: bool = True, root: str = DATASET_PATH, mic_id: str = "mic2", audio_ext: str = ".flac"):
+  def __init__(self, params: DataParams, precompute_features: bool = False, root: str = DATASET_PATH, mic_id: str = "mic2", audio_ext: str = ".flac"):
     self.mfcc_transform = transforms.MelSpectrogram(sample_rate=params.sample_rate, n_mels=params.n_mel_channels,
                                                     f_min=params.fmin, f_max=params.fmax, win_length=params.win_length,
                                                     hop_length=params.hop_length, n_fft=params.filter_length)
 
-    self.resample_transform = transforms.Resample(orig_freq=48000, new_freq=params.sample_rate)
+    self.resample_transform = transforms.Resample(orig_freq=params.orig_rate, new_freq=params.sample_rate)
     self.precompute_features = precompute_features
 
     self.params = params
@@ -47,6 +43,7 @@ class VCTK(Dataset):
     self._orig_audio_dir = os.path.join(self._path, "wav48_silence_trimmed")
 
     sr_int = int(self.params.sample_rate / 1000)
+    self._lengths_file = os.path.join(self._path, f"lengths.json")
     self._audio_dir = os.path.join(self._path, f"wav{sr_int}")
     self._mfcc_dir = os.path.join(self._path, "mfcc")
     self._mic_id = mic_id
@@ -75,6 +72,13 @@ class VCTK(Dataset):
     if precompute_features:
       self._precompute()
 
+    # Either precompute or have the file to filter by length
+    if os.path.exists(self._lengths_file):
+      print(f"WARNING: Removing all samples with length greater than {params.max_sec}")
+      lengths = pickle.load(open(self._lengths_file, "rb"))
+      valid_samples = set([sample for sample in lengths if lengths[tuple(sample)] < params.max_sec])
+      self._sample_ids = [sample for sample in self._sample_ids if tuple(sample) in valid_samples]
+
   def _precompute(self) -> None:
     if not os.path.exists(self._audio_dir):
       os.mkdir(self._audio_dir)
@@ -85,6 +89,7 @@ class VCTK(Dataset):
     mfcc_hash_path = f"{self._mfcc_dir}/hash.txt"
     save_audio = True
     save_mfcc = True
+    save_lengths = True
     if os.path.isfile(audio_hash_path):
       with open(audio_hash_path, 'r') as f:
         save_audio = f.readline() != self.params.wav_hash()
@@ -97,14 +102,16 @@ class VCTK(Dataset):
       if save_mfcc:
         print("WARNING: OVERWRITING OLD PRECOMPUTED MFCCS")
 
-    if not save_mfcc and not save_audio:
+    if not save_mfcc and not save_audio and not save_lengths:
       return
 
+    sample_lengths = {}
     for speaker_id, utterance_id in tqdm(self._sample_ids):
       wav_path = os.path.join(self._audio_dir, speaker_id)
       mfcc_path = os.path.join(self._mfcc_dir, speaker_id)
 
       waveform, _ = self._load_original_sample(speaker_id, utterance_id)
+      sample_lengths[(speaker_id, utterance_id)] = waveform.shape[1] / self.params.orig_rate
       if save_audio:
         waveform = self._process_waveform(waveform)
       if save_mfcc:
@@ -125,6 +132,8 @@ class VCTK(Dataset):
       f.write(self.params.wav_hash())
     with open(mfcc_hash_path, 'w') as f:
       f.write(self.params.mfcc_hash())
+    with open(self._lengths_file, 'wb') as f:
+      pickle.dump(sample_lengths, f)
 
   def _process_waveform(self, waveform: torch.Tensor) -> torch.Tensor:
     if self.params.sample_rate != 48000:
@@ -262,3 +271,52 @@ class TTSCollate():
       "mfcc_lens": output_lengths
     }
 
+class ASRCollate():
+    def __init__(
+      self,
+      model_name: Optional[str] = "facebook/wav2vec2-large-960h",
+      padding: Union[bool, str] = True,
+      max_length: Optional[int] = None,
+      max_length_labels: Optional[int] = None,
+      pad_to_multiple_of: Optional[int] = None,
+      pad_to_multiple_of_labels: Optional[int] = None,
+      sample_rate: Optional[int] = 16000
+    ):
+      
+      self.processor = Wav2Vec2Processor.from_pretrained(model_name)
+      self.padding = padding
+      self.max_length = max_length
+      self.max_length_labels = max_length_labels
+      self.pad_to_multiple_of = pad_to_multiple_of
+      self.pad_to_multiple_of_labels = pad_to_multiple_of_labels
+      self.sample_rate = sample_rate
+
+    def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
+      input_features, label_features = [], []
+      for feature in features:
+        input_values = self.processor(feature["waveform"], sampling_rate=self.sample_rate).input_values[0]
+        input_features.append({"input_values": input_values})
+        with self.processor.as_target_processor():
+          labels = self.processor(feature["text"]).input_ids
+          label_features.append({"input_ids": labels})
+
+      batch = self.processor.pad(
+        input_features,
+        padding=self.padding,
+        max_length=self.max_length,
+        pad_to_multiple_of=self.pad_to_multiple_of,
+        return_tensors="pt",
+      )
+      with self.processor.as_target_processor():
+        labels_batch = self.processor.pad(
+          label_features,
+          padding=self.padding,
+          max_length=self.max_length_labels,
+          pad_to_multiple_of=self.pad_to_multiple_of_labels,
+          return_tensors="pt",
+        )
+
+      # Replace padding with -100 to ignore loss correctly.
+      labels = labels_batch["input_ids"].masked_fill(labels_batch.attention_mask.ne(1), -100)
+      batch["labels"] = labels
+      return batch
