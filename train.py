@@ -6,7 +6,7 @@ import torch
 from torch.utils.data import DataLoader, random_split
 
 from hyper_params import TrainingParams, TacotronParams, DataParams
-from data_utils import VCTK, TTSCollate, VCTK_092_Speaker
+from data_utils import VCTK, TTSCollate
 from tacotron2 import Tacotron2, Tacotron2Loss
 
 def load_data(params: TrainingParams, data_params: DataParams, n_frames_per_step: int):
