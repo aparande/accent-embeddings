@@ -145,6 +145,9 @@ class VCTK(Dataset):
   def _process_mfcc(self, waveform: torch.Tensor) -> torch.Tensor:
     return torch.log(torch.clamp(self.mfcc_transform(waveform), min=1e-5))
 
+  def _process_transcript(self, transcript: str) -> str:
+    return transcript.upper()
+    
   def _load_text(self, file_path: str) -> str:
     with open(file_path) as f:
       return f.readlines()[0]
@@ -186,6 +189,7 @@ class VCTK(Dataset):
     if self.precompute_features:
       transcript_path = os.path.join(self._txt_dir, speaker_id, f"{speaker_id}_{utterance_id}.txt")
       transcript = self._load_text(transcript_path)
+      transcript = self._process_transcript(transcript)
 
       wav_path = os.path.join(self._audio_dir, speaker_id, f"{speaker_id}_{utterance_id}.pt")
       waveform = torch.load(wav_path)
@@ -194,12 +198,11 @@ class VCTK(Dataset):
       mfcc = torch.load(mfcc_path)
     else:
       waveform, transcript = self._load_original_sample(speaker_id, utterance_id)
-      _, idx = librosa.effects.trim(waveform.numpy()[0], top_db=self.params.silence_thresh)
-      waveform = waveform[:, idx[0]:]
-      mfcc = torch.log(torch.clamp(self.mfcc_transform(waveform), min=1e-5))
+      waveform = self._process_waveform(waveform)
+      mfcc = self._process_mfcc(waveform)
+      transcript = self._process_transcript(transcript)
 
     return waveform, mfcc, transcript
-
 
   def __getitem__(self, n: int) -> Dict[str, Any]:
     speaker_id, utterance_id = self._sample_ids[n]
@@ -228,7 +231,7 @@ class TTSCollate():
   """
   Based on TextMelCollate from https://github.com/NVIDIA/tacotron2/blob/master/data_utils.py
   """
-  def __init__(self, n_frames_per_step):
+  def __init__(self, n_frames_per_step: int = 1):
     self.n_frames_per_step = n_frames_per_step
 
   def __call__(self, batch):
@@ -272,51 +275,61 @@ class TTSCollate():
     }
 
 class ASRCollate():
-    def __init__(
-      self,
-      model_name: Optional[str] = "facebook/wav2vec2-large-960h",
-      padding: Union[bool, str] = True,
-      max_length: Optional[int] = None,
-      max_length_labels: Optional[int] = None,
-      pad_to_multiple_of: Optional[int] = None,
-      pad_to_multiple_of_labels: Optional[int] = None,
-      sample_rate: Optional[int] = 16000
-    ):
-      
-      self.processor = Wav2Vec2Processor.from_pretrained(model_name)
-      self.padding = padding
-      self.max_length = max_length
-      self.max_length_labels = max_length_labels
-      self.pad_to_multiple_of = pad_to_multiple_of
-      self.pad_to_multiple_of_labels = pad_to_multiple_of_labels
-      self.sample_rate = sample_rate
+  def __init__(
+    self,
+    model_name: Optional[str] = "facebook/wav2vec2-large-960h",
+    padding: Union[bool, str] = True,
+    max_length: Optional[int] = None,
+    max_length_labels: Optional[int] = None,
+    pad_to_multiple_of: Optional[int] = None,
+    pad_to_multiple_of_labels: Optional[int] = None,
+    sample_rate: Optional[int] = 16000
+  ):
+    
+    self.processor = Wav2Vec2Processor.from_pretrained(model_name)
+    self.padding = padding
+    self.max_length = max_length
+    self.max_length_labels = max_length_labels
+    self.pad_to_multiple_of = pad_to_multiple_of
+    self.pad_to_multiple_of_labels = pad_to_multiple_of_labels
+    self.sample_rate = sample_rate
 
-    def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
-      input_features, label_features = [], []
-      for feature in features:
-        input_values = self.processor(feature["waveform"], sampling_rate=self.sample_rate).input_values[0]
-        input_features.append({"input_values": input_values})
-        with self.processor.as_target_processor():
-          labels = self.processor(feature["text"]).input_ids
-          label_features.append({"input_ids": labels})
+  def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
+    input_features, label_features = [], []
+    for feature in features:
+      input_values = self.processor(feature["waveform"], sampling_rate=self.sample_rate).input_values[0]
+      input_features.append({"input_values": input_values})
+      with self.processor.as_target_processor():
+        labels = self.processor(feature["text"]).input_ids
+        label_features.append({"input_ids": labels})
 
-      batch = self.processor.pad(
-        input_features,
+    batch = self.processor.pad(
+      input_features,
+      padding=self.padding,
+      max_length=self.max_length,
+      pad_to_multiple_of=self.pad_to_multiple_of,
+      return_tensors="pt",
+    )
+    with self.processor.as_target_processor():
+      labels_batch = self.processor.pad(
+        label_features,
         padding=self.padding,
-        max_length=self.max_length,
-        pad_to_multiple_of=self.pad_to_multiple_of,
+        max_length=self.max_length_labels,
+        pad_to_multiple_of=self.pad_to_multiple_of_labels,
         return_tensors="pt",
       )
-      with self.processor.as_target_processor():
-        labels_batch = self.processor.pad(
-          label_features,
-          padding=self.padding,
-          max_length=self.max_length_labels,
-          pad_to_multiple_of=self.pad_to_multiple_of_labels,
-          return_tensors="pt",
-        )
 
-      # Replace padding with -100 to ignore loss correctly.
-      labels = labels_batch["input_ids"].masked_fill(labels_batch.attention_mask.ne(1), -100)
-      batch["labels"] = labels
-      return batch
+    # Replace padding with -100 to ignore loss correctly.
+    labels = labels_batch["input_ids"].masked_fill(labels_batch.attention_mask.ne(1), -100)
+    batch["labels"] = labels
+    return batch
+
+class Collate():
+  def __init__(self):
+    self.tts_collate = TTSCollate()
+    self.asr_collate = ASRCollate()
+
+  def __call__(self, batch):
+    tts_batch = self.tts_collate.__call__(batch)
+    asr_batch = self.asr_collate.__call__(batch)
+    return {**tts_batch, **asr_batch}
