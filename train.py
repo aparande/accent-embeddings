@@ -8,6 +8,10 @@ from models.wav2vec_asr import Wav2VecASR, Wav2VecASRLoss
 from multitask import AccentedMultiTaskNetwork, Task
 
 from pytorch_lightning import Trainer
+from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.loggers import WandbLogger
+
+from hyper_params import TrainingParams, DataParams, MultiTaskParams, Wav2VecASRParams
 
 def load_data(params, data_params):
   if data_params.speaker is not None:
@@ -26,13 +30,19 @@ def load_data(params, data_params):
   return train_loader, val_loader, collate_fn
 
 def train(params, multitask_params, model_params, train_loader, val_loader):
-  
+  checkpoint_callback = ModelCheckpoint(monitor="val_loss", dirpath=".", filename=params.model_path, save_top_k=1)
+  wandb_logger = WandbLogger(project="accent_embeddings")
+
   # Multitask network without bottleneck, just acts as a wrapper to run model
-  learning_rate, weight_decay = params.lr, params.weight_decay
+  lr, weight_decay = params.learning_rate, params.weight_decay
   model = Wav2VecASR(model_params)
   loss = Wav2VecASRLoss()
   tasks = [Task(model, loss, lr, weight_decay, 'asr')]
 
   multitask_model = AccentedMultiTaskNetwork(multitask_params, tasks, lr=lr, weight_decay=weight_decay)
-  trainer = Trainer()
+  trainer = Trainer(logger=wandb_logger, callbacks=[checkpoint_callback])
   trainer.fit(multitask_model, train_loader, val_loader)
+
+if __name__ == "__main__":
+  train_loader, val_loader, collate_fn = load_data(TrainingParams, DataParams)
+  train(TrainingParams, MultiTaskParams, Wav2VecASRParams, train_loader, val_loader)

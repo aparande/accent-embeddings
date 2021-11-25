@@ -5,8 +5,8 @@ import hashlib
 
 @dataclass
 class TrainingParams:
-  epochs: int = 5
-  learning_rate: float = 1e-5
+  epochs: int = 30
+  learning_rate: float = 1e-7
   weight_decay: float = 0
   grad_clip_thresh: float = 1.0
   batch_size: float = 16
@@ -14,7 +14,7 @@ class TrainingParams:
   save_interval: int = 100
   random_seed: int = 42
   val_size: float = 0.1
-  model_path: str = "tacotron.pth"
+  model_path: str = "best.ckpt"
 
 @dataclass
 class DataParams:
