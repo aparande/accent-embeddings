@@ -5,4 +5,5 @@ Unidecode>=1.3.2
 tqdm>=4.62.3
 pytorch-lightning>=1.5.2
 transformers>=4.12.5
+wandb
 
