@@ -26,8 +26,9 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
     # Makes network aware of other model parameters.
     self.models = nn.ModuleList([task.model for task in self.tasks])
 
-    self.wav2vec_processor = Wav2Vec2Processor.from_pretrained(params.wav2vec)
-    self.wav2vec_model = Wav2Vec2Model.from_pretrained(params.wav2vec)
+    # self.bottleneck = Bottleneck(params.in_dim, params.out_dim, params.hidden_dim)
+    # self.wav2vec_processor = Wav2Vec2Processor.from_pretrained(params.wav2vec)
+    # self.wav2vec_model = Wav2Vec2Model.from_pretrained(params.wav2vec)
 
     for param in self.wav2vec_model.parameters():
       param.requires_grad = False
@@ -54,20 +55,19 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
     return torch.mean(outputs, 1)
 
   def forward(self, inputs):
-    wav2vec_feats = self.get_wav2vec_features(inputs)
-    accent_embed = self.bottleneck(wav2vec_feats)
+    # wav2vec_feats = self.get_wav2vec_features(inputs)
+    # accent_embed = self.bottleneck(wav2vec_feats)
 
     outs = dict()
     for task in self.tasks:
       x = task.model.parse_batch(inputs)
-      outs[task.name] = task.model(x, accent_embed, wav2vec_feats)
+      outs[task.name] = task.model(x)
 
     return outs
 
   def training_step(self, batch, batch_idx):
     wav2vec_feats = self.get_wav2vec_features(batch)
     accent_embed = self.bottleneck(wav2vec_feats)
-
     loss_vals = []
     for task in self.tasks:
       x = task.model.parse_batch(batch, train=True)
@@ -114,6 +114,6 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
       "lr": task.learning_rate,
       "weight_decay": task.weight_decay
     } for task in self.tasks ]
-    optim_args.append( { "params" : self.bottleneck.parameters() } )
+    # optim_args.append( { "params" : self.bottleneck.parameters() } )
     return torch.optim.Adam(optim_args, lr=self.lr, weight_decay=self.weight_decay)
 

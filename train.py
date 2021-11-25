@@ -1,18 +1,18 @@
 import os
-
 from tqdm import tqdm
-
 import torch
 from torch.utils.data import DataLoader, random_split
+from data_utils import VCTK, ASRCollate
+from models.tacotron2 import Tacotron2, Tacotron2Loss
+from models.wav2vec_asr import Wav2VecASR, Wav2VecASRLoss
+from multitask import AccentedMultiTaskNetwork, Task
 
-from hyper_params import TrainingParams, TacotronParams, DataParams
-from data_utils import VCTK, TTSCollate
-from tacotron2 import Tacotron2, Tacotron2Loss
+from pytorch_lightning import Trainer
+
 
 def load_data(params: TrainingParams, data_params: DataParams, n_frames_per_step: int):
   dataset = VCTK(data_params)
-
-  collate_fn = TTSCollate(n_frames_per_step)
+  collate_fn = ASRCollate()
 
   val_size = int(params.val_size * len(dataset))
   train_size = len(dataset) - val_size
@@ -22,3 +22,14 @@ def load_data(params: TrainingParams, data_params: DataParams, n_frames_per_step
   val_loader = DataLoader(val, batch_size=params.batch_size, shuffle=False, collate_fn=collate_fn)
   return train_loader, val_loader
 
+def train(params, multitask_params, model_params, train_loader, val_loader):
+  
+  # Multitask network without bottleneck, just acts as a wrapper to run model
+  learning_rate, weight_decay = params.lr, params.weight_decay
+  model = Wav2VecASR(model_params)
+  loss = Wav2VecASRLoss()
+  tasks = [Task(model, loss, lr, weight_decay, 'asr')]
+
+  multitask_model = AccentedMultiTaskNetwork(multitask_params, tasks, lr=lr, weight_decay=weight_decay)
+  trainer = Trainer()
+  trainer.fit(multitask_model, train_loader, val_loader)

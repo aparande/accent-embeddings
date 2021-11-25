@@ -5,9 +5,9 @@ import hashlib
 
 @dataclass
 class TrainingParams:
-  epochs:int = 5
-  learning_rate: float = 1e-3
-  weight_decay: float = 1e-6
+  epochs: int = 5
+  learning_rate: float = 1e-5
+  weight_decay: float = 0
   grad_clip_thresh: float = 1.0
   batch_size: float = 16
   report_interval: int = 5
@@ -71,17 +71,21 @@ class TacotronParams:
   p_decoder_dropout: float = 0.1
 
   # Attention params
-  attention_rnn_dim:int = 1024
-  attention_dim:int = 128
+  attention_rnn_dim: int = 1024
+  attention_dim: int = 128
 
   # Location Layer Parameters
-  attention_location_n_filters:int = 32
+  attention_location_n_filters: int = 32
   attention_location_kernel_size: int = 31
 
   # Mel Post-Net Params
-  postnet_embedding_dim:int = 512
-  postnet_kernel_size:int = 5
-  postnet_n_convolutions:int = 5
+  postnet_embedding_dim: int = 512
+  postnet_kernel_size: int = 5
+  postnet_n_convolutions: int = 5
+
+@dataclass
+class Wav2VecASRParams:
+  model_name: str = "facebook/wav2vec2-large-960h"
 
   # Accent Embedding Params
   accent_embed_dim: int = 5 # Must match with out_dim of MultiTaskParams
