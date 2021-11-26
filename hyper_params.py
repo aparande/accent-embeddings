@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import List
 from text import symbols
 import hashlib
 
@@ -78,3 +79,13 @@ class TacotronParams:
   postnet_embedding_dim:int = 512
   postnet_kernel_size:int = 5
   postnet_n_convolutions:int = 5
+
+  # Accent Embedding Params
+  accent_embed_dim: int = 5 # Must match with out_dim of MultiTaskParams
+
+@dataclass
+class MultiTaskParams:
+  in_dim: int = 1
+  out_dim: int = 5
+  hidden_dim: List[int] = field(default_factory=list)
+  wav2vec: str = "facebook/wav2vec2-large-960h"

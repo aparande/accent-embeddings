@@ -3,7 +3,7 @@ import torch
 from torch.autograd import Variable
 from torch import nn
 from torch.nn import functional as F
-from utils import to_gpu, get_mask_from_lengths
+from utils import get_mask_from_lengths
 
 class Tacotron2Loss(nn.Module):
 	def __init__(self):
@@ -263,7 +263,7 @@ class Decoder(nn.Module):
         self.p_decoder_dropout = hparams.p_decoder_dropout
 
         self.prenet = Prenet(
-            hparams.n_mel_channels * hparams.n_frames_per_step,
+            hparams.n_mel_channels * hparams.n_frames_per_step + hparams.accent_embed_dim,
             [hparams.prenet_dim, hparams.prenet_dim])
 
         self.attention_rnn = nn.LSTMCell(
@@ -425,7 +425,7 @@ class Decoder(nn.Module):
         gate_prediction = self.gate_layer(decoder_hidden_attention_context)
         return decoder_output, gate_prediction, self.attention_weights
 
-    def forward(self, memory, decoder_inputs, memory_lengths):
+    def forward(self, memory, decoder_inputs, memory_lengths, accent_embed):
         """ Decoder forward pass for training
         PARAMS
         ------
@@ -443,6 +443,9 @@ class Decoder(nn.Module):
         decoder_input = self.get_go_frame(memory).unsqueeze(0)
         decoder_inputs = self.parse_decoder_inputs(decoder_inputs)
         decoder_inputs = torch.cat((decoder_input, decoder_inputs), dim=0)
+
+        accent_embed = accent_embed.unsqueeze(0).expand(decoder_inputs.size(0), -1, -1)
+        decoder_inputs = torch.cat((decoder_inputs, accent_embed), dim=2)
         decoder_inputs = self.prenet(decoder_inputs)
 
         self.initialize_decoder_states(
@@ -462,7 +465,7 @@ class Decoder(nn.Module):
 
         return mel_outputs, gate_outputs, alignments
 
-    def inference(self, memory):
+    def inference(self, memory, accent_embed):
         """ Decoder inference
         PARAMS
         ------
@@ -480,6 +483,7 @@ class Decoder(nn.Module):
 
         mel_outputs, gate_outputs, alignments = [], [], []
         while True:
+            decoder_input = torch.cat((decoder_input, accent_embed), dim=1)
             decoder_input = self.prenet(decoder_input)
             mel_output, gate_output, alignment = self.decode(decoder_input)
 
@@ -517,19 +521,17 @@ class Tacotron2(nn.Module):
         self.decoder = Decoder(hparams)
         self.postnet = Postnet(hparams)
 
-    def parse_batch(self, batch):
-        text_padded, input_lengths, mel_padded, gate_padded, \
-            output_lengths = batch
-        text_padded = to_gpu(text_padded).long()
-        input_lengths = to_gpu(input_lengths).long()
-        max_len = torch.max(input_lengths.data).item()
-        mel_padded = to_gpu(mel_padded).float()
-        gate_padded = to_gpu(gate_padded).float()
-        output_lengths = to_gpu(output_lengths).long()
+    def parse_batch(self, batch, train=False):
+        text = batch["text_tensor"]
+        text_lens = batch["text_lens"]
+        max_len = torch.max(batch["text_lens"].data)
+        mfccs = batch["mfcc"]
+        mfcc_lengths = batch["mfcc_lens"]
 
-        return (
-            (text_padded, input_lengths, mel_padded, max_len, output_lengths),
-            (mel_padded, gate_padded))
+        return text, text_lens, mfccs, max_len, mfcc_lengths
+
+    def get_targets(self, batch):
+      return batch["mfcc"], batch["gates"]
 
     def parse_output(self, outputs, output_lengths=None):
         if self.mask_padding and output_lengths is not None:
@@ -543,29 +545,15 @@ class Tacotron2(nn.Module):
 
         return outputs
 
-    def forward(self, inputs):
-        text_inputs, text_lengths, mels, max_len, output_lengths = inputs
-        text_lengths, output_lengths = text_lengths.data, output_lengths.data
+    def forward(self, inputs, accent_embed):
+        if type(inputs) != torch.Tensor:
+          return self.training_step(inputs, accent_embed)
 
-        embedded_inputs = self.embedding(text_inputs).transpose(1, 2)
-
-        encoder_outputs = self.encoder(embedded_inputs, text_lengths)
-
-        mel_outputs, gate_outputs, alignments = self.decoder(
-            encoder_outputs, mels, memory_lengths=text_lengths)
-
-        mel_outputs_postnet = self.postnet(mel_outputs)
-        mel_outputs_postnet = mel_outputs + mel_outputs_postnet
-
-        return self.parse_output(
-            [mel_outputs, mel_outputs_postnet, gate_outputs, alignments],
-            output_lengths)
-
-    def inference(self, inputs):
+        assert accent_embed.size(0) == 1, "Batch inference not possible"
         embedded_inputs = self.embedding(inputs).transpose(1, 2)
         encoder_outputs = self.encoder.inference(embedded_inputs)
         mel_outputs, gate_outputs, alignments = self.decoder.inference(
-            encoder_outputs)
+            encoder_outputs, accent_embed)
 
         mel_outputs_postnet = self.postnet(mel_outputs)
         mel_outputs_postnet = mel_outputs + mel_outputs_postnet
@@ -574,3 +562,22 @@ class Tacotron2(nn.Module):
             [mel_outputs, mel_outputs_postnet, gate_outputs, alignments])
 
         return outputs
+
+    def training_step(self, inputs, accent_embed):
+        text_inputs, text_lengths, mels, max_len, output_lengths = inputs
+        text_lengths, output_lengths = text_lengths.data, output_lengths.data
+
+        embedded_inputs = self.embedding(text_inputs).transpose(1, 2)
+
+        encoder_outputs = self.encoder(embedded_inputs, text_lengths)
+
+        mel_outputs, gate_outputs, alignments = self.decoder(
+            encoder_outputs, mels, text_lengths, accent_embed)
+
+        mel_outputs_postnet = self.postnet(mel_outputs)
+        mel_outputs_postnet = mel_outputs + mel_outputs_postnet
+
+        return self.parse_output(
+            [mel_outputs, mel_outputs_postnet, gate_outputs, alignments],
+            output_lengths)
+
