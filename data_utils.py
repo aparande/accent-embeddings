@@ -215,8 +215,11 @@ class VCTK(Dataset):
   def __len__(self) -> int:
     return len(self._sample_ids)
 
-class VCTKCollate():
-  def __init__(self, n_frames_per_step: int):
+class TTSCollate():
+  """
+  Based on TextMelCollate from https://github.com/NVIDIA/tacotron2/blob/master/data_utils.py
+  """
+  def __init__(self, n_frames_per_step):
     self.n_frames_per_step = n_frames_per_step
 
   def __call__(self, batch):
@@ -251,20 +254,11 @@ class VCTKCollate():
       gate_padded[i, mel.size(1)-1:] = 1
       output_lengths[i] = mel.size(1)
 
-    # right zero-pad waveform
-    max_waveform_len = max([x["waveform"].size(0) for x in batch])
-    waveform_padded = torch.FloatTensor(len(batch), max_waveform_len)
-    waveform_padded.zero_()
-    for i, idx in enumerate(ids_sorted_decreasing):
-      wav = batch[idx]["waveform"]
-      waveform_padded[i, :wav.size(0)] = wav
-
     return {
       "text_tensor": text_padded,
       "text_lens": input_lengths,
       "mfcc": mel_padded,
       "gates": gate_padded,
-      "mfcc_lens": output_lengths,
-      "waveform": waveform_padded
+      "mfcc_lens": output_lengths
     }
 
