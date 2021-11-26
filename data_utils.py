@@ -17,6 +17,8 @@ from transformers import Wav2Vec2Processor
 from text import text_to_sequence
 from hyper_params import DataParams
 
+from sklearn import preprocessing
+
 DATASET_PATH = os.environ['DATASET_PATH']
 
 class VCTK(Dataset):
@@ -147,7 +149,7 @@ class VCTK(Dataset):
 
   def _process_transcript(self, transcript: str) -> str:
     return transcript.upper()
-    
+
   def _load_text(self, file_path: str) -> str:
     with open(file_path) as f:
       return f.readlines()[0]
@@ -176,6 +178,17 @@ class VCTK(Dataset):
       with open(gender_path, 'w') as f:
         json.dump(self.gender_map, f)
 
+    # Preprocess accents and gender into one-hot encodings
+    for metadata_map in (self.accent_map, self.gender_map):
+      encoder = preprocessing.LabelEncoder()
+      encoder.fit(list(metadata_map.values()))
+      num_classes = len(encoder.classes_)
+      for speaker, value in metadata_map:
+        [idx] = encoder.transform([value])
+        metadata_map[speaker] = torch.zeros(num_classes)
+        metadata_map[speaker][idx] = 1
+
+
   def _load_original_sample(self, speaker_id: str, utterance_id: str) -> Tuple[torch.Tensor, str]:
     transcript_path = os.path.join(self._txt_dir, speaker_id, f"{speaker_id}_{utterance_id}.txt")
     audio_path = os.path.join(self._orig_audio_dir, speaker_id, f"{speaker_id}_{utterance_id}_{self._mic_id}{self._audio_ext}")
@@ -203,6 +216,7 @@ class VCTK(Dataset):
       transcript = self._process_transcript(transcript)
 
     return waveform, mfcc, transcript
+
 
   def __getitem__(self, n: int) -> Dict[str, Any]:
     speaker_id, utterance_id = self._sample_ids[n]
@@ -322,6 +336,43 @@ class ASRCollate():
     # Replace padding with -100 to ignore loss correctly.
     labels = labels_batch["input_ids"].masked_fill(labels_batch.attention_mask.ne(1), -100)
     batch["labels"] = labels
+    return batch
+
+class IDCollate():
+  def __init__(
+          self,
+          model_name: Optional[str] = "facebook/wav2vec2-large-960h",
+          padding: Union[bool, str] = True,
+          max_length: Optional[int] = None,
+          max_length_labels: Optional[int] = None,
+          pad_to_multiple_of: Optional[int] = None,
+          pad_to_multiple_of_labels: Optional[int] = None,
+          sample_rate: Optional[int] = 16000
+  ):
+    self.processor = Wav2Vec2Processor.from_pretrained(model_name)
+    self.padding = padding
+    self.max_length = max_length
+    self.max_length_labels = max_length_labels
+    self.pad_to_multiple_of = pad_to_multiple_of
+    self.pad_to_multiple_of_labels = pad_to_multiple_of_labels
+    self.sample_rate = sample_rate
+
+  def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
+    input_features, label_features = [], []
+    for feature in features:
+      input_values = self.processor(feature["waveform"], sampling_rate=self.sample_rate).input_values[0]
+      input_features.append({"input_values": input_values})
+      label_features.append(feature["accent"].unsqueeze(0))
+
+    batch = self.processor.pad(
+      input_features,
+      padding=self.padding,
+      max_length=self.max_length,
+      pad_to_multiple_of=self.pad_to_multiple_of,
+      return_tensors="pt",
+    )
+
+    batch["labels"] = torch.cat(label_features)
     return batch
 
 class Collate():
