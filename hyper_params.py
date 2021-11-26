@@ -91,6 +91,12 @@ class Wav2VecASRParams:
   accent_embed_dim: int = 5 # Must match with out_dim of MultiTaskParams
 
 @dataclass
+class Wav2VecIDParams:
+  model_name: str = "facebook/wav2vec2-large-960h"
+  num_accents: int = 13
+  num_genders: int = 2
+
+@dataclass
 class MultiTaskParams:
   in_dim: int = 1
   out_dim: int = 5
