@@ -121,7 +121,7 @@ class VCTK(Dataset):
 
       if not os.path.exists(wav_path):
         os.mkdir(wav_path)
-      if not os.path.exists(mfcc_path): 
+      if not os.path.exists(mfcc_path):
         os.mkdir(mfcc_path)
 
       if save_audio:
@@ -178,15 +178,18 @@ class VCTK(Dataset):
       with open(gender_path, 'w') as f:
         json.dump(self.gender_map, f)
 
-    # Preprocess accents and gender into one-hot encodings
-    for metadata_map in (self.accent_map, self.gender_map):
-      encoder = preprocessing.LabelEncoder()
-      encoder.fit(list(metadata_map.values()))
-      num_classes = len(encoder.classes_)
-      for speaker, value in metadata_map:
-        [idx] = encoder.transform([value])
-        metadata_map[speaker] = torch.zeros(num_classes)
-        metadata_map[speaker][idx] = 1
+    # Preprocess accents into one-hot encodings
+    accents = self.accent_map.values()
+    num_accents = len(accents)
+    accent_to_idx, i = {}, 0
+    for accent in accents:
+      if accent not in accent_to_idx:
+        accent_to_idx[accent] = i
+        i += 1
+    for speaker, accent in self.accent_map:
+      self.accent_map[speaker] = torch.zeros(num_accents)
+      self.accent_map[speaker][accent_to_idx[accent]] = 1
+
 
 
   def _load_original_sample(self, speaker_id: str, utterance_id: str) -> Tuple[torch.Tensor, str]:
@@ -299,7 +302,7 @@ class ASRCollate():
     pad_to_multiple_of_labels: Optional[int] = None,
     sample_rate: Optional[int] = 16000
   ):
-    
+
     self.processor = Wav2Vec2Processor.from_pretrained(model_name)
     self.padding = padding
     self.max_length = max_length

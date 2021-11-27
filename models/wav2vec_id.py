@@ -1,23 +1,18 @@
-import torch
 from torch import nn
-from transformers import Wav2Vec2PreTrainedModel, Wav2Vec2Model, Wav2Vec2Config
-from transformers import AutoConfig, AutoModelForAudioClassification
 
 
 class Wav2VecIDLoss(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def forward(self, model_output):
-        return model_output['loss']
+    def forward(self, model_output, targets):
+        return nn.functional.cross_entropy(model_output, targets)
 
 
-class Wav2VecID(Wav2Vec2PreTrainedModel):
-    def __init__(self, hparams):
-        config = Wav2Vec2Config.from_pretrained(hparams.model_name)
-
-        super().__init__(config)
-        self.wav2vec2 = AutoModelForAudioClassification.from_config(config)
+class Wav2VecID(nn.Module):
+    def __init__(self, embed_size, num_accents):
+        super().__init__()
+        self.output_layer = nn.Linear(embed_size, num_accents)
 
     def parse_batch(self, batch, train=True):
         return batch["input_values"]
@@ -25,31 +20,13 @@ class Wav2VecID(Wav2Vec2PreTrainedModel):
     def get_targets(self, batch):
         return batch["labels"]
 
-    # Labels should be either list of possible accents or gender
     def forward(
             self,
-            input_values,
-            labels,
-            attention_mask=None,
-            output_attentions=None,
-            output_hidden_states=None,
-            return_dict=None,
+            accent_embed
     ):
-        outputs = self.wav2vec2(
-            input_values,
-            attention_mask=attention_mask,
-            output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
-            labels=labels
-        )
+        output = nn.output_layer(accent_embed)
 
-        loss, logits = outputs[0], outputs[1]
-
-        return {
-            'logits': logits,
-            'loss': loss
-        }
+        return output
 
     def train_step(self, input_values):
         return self.forward(input_values)
