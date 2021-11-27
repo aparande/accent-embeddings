@@ -25,9 +25,9 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
     # Makes network aware of other model parameters.
     self.models = nn.ModuleList([task.model for task in self.tasks])
 
-    # self.bottleneck = Bottleneck(params.in_dim, params.out_dim, params.hidden_dim)
-    # self.wav2vec_processor = Wav2Vec2Processor.from_pretrained(params.wav2vec)
-    # self.wav2vec_model = Wav2Vec2Model.from_pretrained(params.wav2vec)
+    self.bottleneck = Bottleneck(params.in_dim, params.out_dim, params.hidden_dim)
+    self.wav2vec_processor = Wav2Vec2Processor.from_pretrained(params.wav2vec)
+    self.wav2vec_model = Wav2Vec2Model.from_pretrained(params.wav2vec)
 
     for param in self.wav2vec_model.parameters():
       param.requires_grad = False
@@ -36,19 +36,22 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
     self.weight_decay = weight_decay
 
   def get_wav2vec_features(self, batch):
-    waveforms = batch["waveform"]
-    features = self.wav2vec_processor(waveforms, sampling_rate=16000, return_tensors = 'pt')
-    outputs = self.wav2vec_model(features.input_values[0]).last_hidden_state
-    return torch.mean(outputs, 1)
+    # waveforms = batch["waveform"]
+    # features = self.wav2vec_processor(waveforms, sampling_rate=16000, return_tensors = 'pt')
+    input_values = batch["wav2vec_input"]
+    outputs = self.wav2vec_model(input_values[0]).last_hidden_state
+    batch["wav2vec_hidden"] = outputs
+    outputs = torch.mean(outputs, 1)
+    return outputs
 
   def forward(self, inputs):
-    # wav2vec_feats = self.get_wav2vec_features(inputs)
-    # accent_embed = self.bottleneck(wav2vec_feats)
+    wav2vec_feats = self.get_wav2vec_features(inputs)
+    accent_embed = self.bottleneck(wav2vec_feats)
 
     outs = dict()
     for task in self.tasks:
       x = task.model.parse_batch(inputs)
-      outs[task.name] = task.model(x)
+      outs[task.name] = task.model(x, accent_embed)
 
     return outs
 
@@ -101,6 +104,6 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
       "lr": task.learning_rate,
       "weight_decay": task.weight_decay
     } for task in self.tasks ]
-    # optim_args.append( { "params" : self.bottleneck.parameters() } )
+    optim_args.append( { "params" : self.bottleneck.parameters() } )
     return torch.optim.Adam(optim_args, lr=self.lr, weight_decay=self.weight_decay)
 
