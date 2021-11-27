@@ -1,13 +1,12 @@
 from typing import NamedTuple, List
-
 import torch
 from torch import nn
 import torch.nn.functional as F
-
 from transformers import Wav2Vec2Processor, Wav2Vec2Model
 import pytorch_lightning as pl
 
 from hyper_params import MultiTaskParams
+from utils import build_mlp
 
 class Task(NamedTuple):
   model: nn.Module
@@ -21,11 +20,12 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
     super().__init__()
 
     self.params = params
-    self.bottleneck = self._build_bottleneck()
+    self.bottleneck = build_mlp([self.params.in_dim, *self.params.hidden_dim, self.params.out_dim])
     self.tasks = tasks
     # Makes network aware of other model parameters.
     self.models = nn.ModuleList([task.model for task in self.tasks])
 
+    self.bottleneck = Bottleneck(params.in_dim, params.out_dim, params.hidden_dim)
     self.wav2vec_processor = Wav2Vec2Processor.from_pretrained(params.wav2vec)
     self.wav2vec_model = Wav2Vec2Model.from_pretrained(params.wav2vec)
 
@@ -35,23 +35,14 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
     self.lr = lr
     self.weight_decay = weight_decay
 
-  def _build_bottleneck(self):
-    layers = []
-    layers.append(nn.Linear(self.params.in_dim, self.params.hidden_dim[0]))
-    for i, dim in enumerate(self.params.hidden_dim[:-1]):
-      layers.append(nn.ReLU())
-      layers.append(nn.Linear(dim, self.params.hidden_dim[i + 1]))
-
-    layers.append(nn.ReLU())
-    layers.append(nn.Linear(self.params.hidden_dim[-1], self.params.out_dim))
-
-    return nn.Sequential(*layers)
-
   def get_wav2vec_features(self, batch):
-    waveforms = batch["waveform"]
-    features = self.wav2vec_processor(waveforms, sampling_rate=16000, return_tensors = 'pt')
-    outputs = self.wav2vec_model(features.input_values[0]).last_hidden_state
-    return torch.mean(outputs, 1)
+    # waveforms = batch["waveform"]
+    # features = self.wav2vec_processor(waveforms, sampling_rate=16000, return_tensors = 'pt')
+    input_values = batch["wav2vec_input"]
+    outputs = self.wav2vec_model(input_values[0]).last_hidden_state
+    batch["wav2vec_hidden"] = outputs
+    outputs = torch.mean(outputs, 1)
+    return outputs
 
   def forward(self, inputs):
     wav2vec_feats = self.get_wav2vec_features(inputs)
@@ -67,12 +58,10 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
   def training_step(self, batch, batch_idx):
     wav2vec_feats = self.get_wav2vec_features(batch)
     accent_embed = self.bottleneck(wav2vec_feats)
-
     loss_vals = []
     for task in self.tasks:
       x = task.model.parse_batch(batch, train=True)
       y_pred = task.model.training_step(x, accent_embed)
-
       targets = task.model.get_targets(batch)
 
       loss_vals.append(task.loss(y_pred, targets))

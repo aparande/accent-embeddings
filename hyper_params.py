@@ -5,16 +5,16 @@ import hashlib
 
 @dataclass
 class TrainingParams:
-  epochs:int = 5
-  learning_rate: float = 1e-3
-  weight_decay: float = 1e-6
+  epochs: int = 30
+  learning_rate: float = 1e-7
+  weight_decay: float = 0
   grad_clip_thresh: float = 1.0
-  batch_size:float = 4
+  batch_size: float = 16
   report_interval: int = 5
   save_interval: int = 100
-  model_path: str = "tacotron.pth"
   random_seed: int = 42
   val_size: float = 0.1
+  model_path: str = "best.ckpt"
 
 @dataclass
 class DataParams:
@@ -24,9 +24,12 @@ class DataParams:
   n_mel_channels: int = 80
   fmin: float = 0.0
   fmax: float = 8000.0
-  sample_rate: float = 48000
+  # sample_rate: float = 48000
+  orig_rate: float = 48000
+  sample_rate: float = 16000
   speaker: str = None
   silence_thresh: float = 35
+  max_sec: int = 4
 
   def wav_hash(self):
     return hashlib.md5(f"{self.sample_rate}-{self.silence_thresh}".encode('utf-8')).hexdigest()
@@ -68,20 +71,34 @@ class TacotronParams:
   p_decoder_dropout: float = 0.1
 
   # Attention params
-  attention_rnn_dim:int = 1024
-  attention_dim:int = 128
+  attention_rnn_dim: int = 1024
+  attention_dim: int = 128
 
   # Location Layer Parameters
-  attention_location_n_filters:int = 32
+  attention_location_n_filters: int = 32
   attention_location_kernel_size: int = 31
 
   # Mel Post-Net Params
-  postnet_embedding_dim:int = 512
-  postnet_kernel_size:int = 5
-  postnet_n_convolutions:int = 5
+  postnet_embedding_dim: int = 512
+  postnet_kernel_size: int = 5
+  postnet_n_convolutions: int = 5
 
   # Accent Embedding Params
   accent_embed_dim: int = 5 # Must match with out_dim of MultiTaskParams
+
+@dataclass
+class Wav2VecASRParams:
+  model_name: str = "facebook/wav2vec2-large-960h"
+
+  # Accent Embedding Params
+  accent_embed_dim: int = 5 # Must match with out_dim of MultiTaskParams
+
+@dataclass
+class Wav2VecIDParams:
+  # num_genders: int = 2
+  accent_embed_dim: int = 5 # Must match with out_dim of MultiTaskParams
+  hidden_dim: List[int] = field(default_factory=list)
+  num_accents: int = 13
 
 @dataclass
 class MultiTaskParams:
