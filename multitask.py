@@ -1,13 +1,12 @@
 from typing import NamedTuple, List
-
 import torch
 from torch import nn
 import torch.nn.functional as F
-
 from transformers import Wav2Vec2Processor, Wav2Vec2Model
 import pytorch_lightning as pl
 
 from hyper_params import MultiTaskParams
+from utils import build_mlp
 
 class Task(NamedTuple):
   model: nn.Module
@@ -21,7 +20,7 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
     super().__init__()
 
     self.params = params
-    self.bottleneck = self._build_bottleneck()
+    self.bottleneck = build_mlp([self.params.in_dim, *self.params.hidden_dim, self.params.out_dim])
     self.tasks = tasks
     # Makes network aware of other model parameters.
     self.models = nn.ModuleList([task.model for task in self.tasks])
@@ -35,18 +34,6 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
 
     self.lr = lr
     self.weight_decay = weight_decay
-
-  def _build_bottleneck(self):
-    layers = []
-    layers.append(nn.Linear(self.params.in_dim, self.params.hidden_dim[0]))
-    for i, dim in enumerate(self.params.hidden_dim[:-1]):
-      layers.append(nn.ReLU())
-      layers.append(nn.Linear(dim, self.params.hidden_dim[i + 1]))
-
-    layers.append(nn.ReLU())
-    layers.append(nn.Linear(self.params.hidden_dim[-1], self.params.out_dim))
-
-    return nn.Sequential(*layers)
 
   def get_wav2vec_features(self, batch):
     waveforms = batch["waveform"]

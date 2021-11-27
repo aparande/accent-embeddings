@@ -83,6 +83,9 @@ class TacotronParams:
   postnet_kernel_size: int = 5
   postnet_n_convolutions: int = 5
 
+  # Accent Embedding Params
+  accent_embed_dim: int = 5 # Must match with out_dim of MultiTaskParams
+
 @dataclass
 class Wav2VecASRParams:
   model_name: str = "facebook/wav2vec2-large-960h"
@@ -92,9 +95,10 @@ class Wav2VecASRParams:
 
 @dataclass
 class Wav2VecIDParams:
-  model_name: str = "facebook/wav2vec2-large-960h"
+  # num_genders: int = 2
+  accent_embed_dim: int = 5 # Must match with out_dim of MultiTaskParams
+  hidden_dim: List[int] = field(default_factory=list)
   num_accents: int = 13
-  num_genders: int = 2
 
 @dataclass
 class MultiTaskParams:

@@ -179,13 +179,9 @@ class VCTK(Dataset):
         json.dump(self.gender_map, f)
 
     # Preprocess accents into one-hot encodings
-    accents = self.accent_map.values()
-    num_accents = len(accents)
-    accent_to_idx, i = {}, 0
-    for accent in accents:
-      if accent not in accent_to_idx:
-        accent_to_idx[accent] = i
-        i += 1
+    # Sort accents to ensure order is deterministic
+    accents = sorted(set(self.accent_map.values()))
+    accent_to_idx = {accent: i for i, accent in enumerate(accents)}
     for speaker, accent in self.accent_map:
       self.accent_map[speaker] = torch.zeros(num_accents)
       self.accent_map[speaker][accent_to_idx[accent]] = 1
@@ -342,40 +338,11 @@ class ASRCollate():
     return batch
 
 class IDCollate():
-  def __init__(
-          self,
-          model_name: Optional[str] = "facebook/wav2vec2-large-960h",
-          padding: Union[bool, str] = True,
-          max_length: Optional[int] = None,
-          max_length_labels: Optional[int] = None,
-          pad_to_multiple_of: Optional[int] = None,
-          pad_to_multiple_of_labels: Optional[int] = None,
-          sample_rate: Optional[int] = 16000
-  ):
-    self.processor = Wav2Vec2Processor.from_pretrained(model_name)
-    self.padding = padding
-    self.max_length = max_length
-    self.max_length_labels = max_length_labels
-    self.pad_to_multiple_of = pad_to_multiple_of
-    self.pad_to_multiple_of_labels = pad_to_multiple_of_labels
-    self.sample_rate = sample_rate
 
   def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
-    input_features, label_features = [], []
-    for feature in features:
-      input_values = self.processor(feature["waveform"], sampling_rate=self.sample_rate).input_values[0]
-      input_features.append({"input_values": input_values})
-      label_features.append(feature["accent"].unsqueeze(0))
-
-    batch = self.processor.pad(
-      input_features,
-      padding=self.padding,
-      max_length=self.max_length,
-      pad_to_multiple_of=self.pad_to_multiple_of,
-      return_tensors="pt",
-    )
-
-    batch["labels"] = torch.cat(label_features)
+    batch = {}
+    label_features = [feature["accent"].unsqueeze(0) for feature in features]
+    batch["id_accents"] = torch.cat(label_features)
     return batch
 
 class Collate():
