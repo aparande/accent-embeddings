@@ -287,7 +287,7 @@ class TTSCollate():
       "mfcc_lens": output_lengths
     }
 
-class ASRCollate():
+class Wav2VecCollate():
   def __init__(
     self,
     model_name: Optional[str] = "facebook/wav2vec2-large-960h",
@@ -334,7 +334,8 @@ class ASRCollate():
 
     # Replace padding with -100 to ignore loss correctly.
     labels = labels_batch["input_ids"].masked_fill(labels_batch.attention_mask.ne(1), -100)
-    batch["labels"] = labels
+    batch["wav2vec_input"] = batch.pop("input_values")
+    batch["wav2vec_text"] = labels
     return batch
 
 class IDCollate():
@@ -347,10 +348,12 @@ class IDCollate():
 
 class Collate():
   def __init__(self):
+    self.wav2vec_collate = Wav2VecCollate()
     self.tts_collate = TTSCollate()
-    self.asr_collate = ASRCollate()
+    self.id_collate = IDCollate()
 
   def __call__(self, batch):
+    wav2vec_batch = self.wav2vec_collate.__call__(batch)
     tts_batch = self.tts_collate.__call__(batch)
-    asr_batch = self.asr_collate.__call__(batch)
-    return {**tts_batch, **asr_batch}
+    id_batch = self.id_collate.__call__(batch)
+    return {**tts_batch, **wav2vec_batch, **id_batch}

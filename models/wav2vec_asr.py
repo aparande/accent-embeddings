@@ -45,14 +45,15 @@ class Wav2VecASR(Wav2Vec2PreTrainedModel):
     self.wav2vec2.feature_extractor._freeze_parameters()
 
   def parse_batch(self, batch, train=True):
-    return batch["input_values"]
+    return batch["wav2vec_input"]
 
   def get_targets(self, batch):
-    return batch["labels"]
+    return batch["wav2vec_text"]
 
   def forward(
     self,
-    input_values,
+    inputs,
+    accent_embed,
     attention_mask=None,
     output_attentions=None,
     output_hidden_states=None,
@@ -61,7 +62,7 @@ class Wav2VecASR(Wav2Vec2PreTrainedModel):
   ):
 
     outputs = self.wav2vec2(
-      input_values,
+      inputs,
       attention_mask=attention_mask,
       output_attentions=output_attentions,
       output_hidden_states=output_hidden_states,
@@ -75,7 +76,7 @@ class Wav2VecASR(Wav2Vec2PreTrainedModel):
     logits = self.lm_head(hidden_states)
 
     attention_mask = (
-      attention_mask if attention_mask is not None else torch.ones_like(input_values, dtype=torch.long)
+      attention_mask if attention_mask is not None else torch.ones_like(inputs, dtype=torch.long)
     )
     input_lengths = self._get_feat_extract_output_lengths(attention_mask.sum(-1)).to(torch.long)
     
@@ -86,5 +87,5 @@ class Wav2VecASR(Wav2Vec2PreTrainedModel):
       'attentions': outputs.attentions
     }
 
-  def train_step(self, input_values):
-    return self.forward(input_values)
+  def training_step(self, inputs, accent_embed):
+    return self.forward(inputs, accent_embed)

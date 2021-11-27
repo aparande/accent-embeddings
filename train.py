@@ -2,7 +2,7 @@ import os
 from tqdm import tqdm
 import torch
 from torch.utils.data import DataLoader, random_split
-from data_utils import VCTK, ASRCollate
+from data_utils import VCTK, Collate
 from models.tacotron2 import Tacotron2, Tacotron2Loss
 from models.wav2vec_asr import Wav2VecASR, Wav2VecASRLoss
 from multitask import AccentedMultiTaskNetwork, Task
@@ -16,7 +16,7 @@ from hyper_params import TrainingParams, DataParams, MultiTaskParams, Wav2VecASR
 
 def load_data(params: TrainingParams, data_params: DataParams, n_frames_per_step: int):
   dataset = VCTK(data_params)
-  collate_fn = ASRCollate()
+  collate_fn = Collate()
 
   val_size = int(params.val_size * len(dataset))
   train_size = len(dataset) - val_size
