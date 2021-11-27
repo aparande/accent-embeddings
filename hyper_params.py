@@ -95,10 +95,11 @@ class Wav2VecASRParams:
 
 @dataclass
 class Wav2VecIDParams:
-  # num_genders: int = 2
-  accent_embed_dim: int = 5 # Must match with out_dim of MultiTaskParams
   hidden_dim: List[int] = field(default_factory=list)
   num_accents: int = 13
+  
+  # Accent Embedding Params
+  accent_embed_dim: int = 5 # Must match with out_dim of MultiTaskParams
 
 @dataclass
 class MultiTaskParams:

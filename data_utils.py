@@ -182,8 +182,8 @@ class VCTK(Dataset):
     # Sort accents to ensure order is deterministic
     accents = sorted(set(self.accent_map.values()))
     accent_to_idx = {accent: i for i, accent in enumerate(accents)}
-    for speaker, accent in self.accent_map:
-      self.accent_map[speaker] = torch.zeros(num_accents)
+    for speaker, accent in self.accent_map.items():
+      self.accent_map[speaker] = torch.zeros(len(accents))
       self.accent_map[speaker][accent_to_idx[accent]] = 1
 
 
@@ -353,7 +353,7 @@ class Collate():
     self.id_collate = IDCollate()
 
   def __call__(self, batch):
-    wav2vec_batch = self.wav2vec_collate.__call__(batch)
-    tts_batch = self.tts_collate.__call__(batch)
-    id_batch = self.id_collate.__call__(batch)
+    wav2vec_batch = self.wav2vec_collate(batch)
+    tts_batch = self.tts_collate(batch)
+    id_batch = self.id_collate(batch)
     return {**tts_batch, **wav2vec_batch, **id_batch}

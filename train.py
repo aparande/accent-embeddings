@@ -5,6 +5,7 @@ from torch.utils.data import DataLoader, random_split
 from data_utils import VCTK, Collate
 from models.tacotron2 import Tacotron2, Tacotron2Loss
 from models.wav2vec_asr import Wav2VecASR, Wav2VecASRLoss
+from models.wav2vec_id import Wav2VecID, Wav2VecIDLoss
 from multitask import AccentedMultiTaskNetwork, Task
 
 from pytorch_lightning import Trainer
@@ -14,7 +15,7 @@ from pytorch_lightning.loggers import WandbLogger
 from hyper_params import TrainingParams, DataParams, MultiTaskParams, Wav2VecASRParams
 
 
-def load_data(params: TrainingParams, data_params: DataParams, n_frames_per_step: int):
+def load_data(params: TrainingParams, data_params: DataParams):
   dataset = VCTK(data_params)
   collate_fn = Collate()
 
