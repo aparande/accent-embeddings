@@ -183,8 +183,7 @@ class VCTK(Dataset):
     accents = sorted(set(self.accent_map.values()))
     accent_to_idx = {accent: i for i, accent in enumerate(accents)}
     for speaker, accent in self.accent_map.items():
-      self.accent_map[speaker] = torch.zeros(len(accents))
-      self.accent_map[speaker][accent_to_idx[accent]] = 1
+      self.accent_map[speaker] = accent_to_idx[accent]
 
 
 
@@ -342,8 +341,8 @@ class IDCollate():
 
   def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
     batch = {}
-    label_features = [feature["accent"].unsqueeze(0) for feature in features]
-    batch["accents"] = torch.cat(label_features)
+    label_features = [feature["accent"] for feature in features]
+    batch["accents"] = torch.LongTensor(label_features)
     return batch
 
 class Collate():
