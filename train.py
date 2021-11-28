@@ -27,20 +27,30 @@ def load_data(params: TrainingParams, data_params: DataParams):
   val_loader = DataLoader(val, batch_size=params.batch_size, shuffle=False, collate_fn=collate_fn)
   return train_loader, val_loader
 
-def train(params, multitask_params, model_params, train_loader, val_loader):
+def train(params, multitask_params, train_loader, val_loader):
   checkpoint_callback = ModelCheckpoint(monitor="val_loss", dirpath=".", filename=params.model_path, save_top_k=1)
   wandb_logger = WandbLogger(project="accent_embeddings")
 
   # Multitask network without bottleneck, just acts as a wrapper to run model
   lr, weight_decay = params.learning_rate, params.weight_decay
-  model = Wav2VecASR(model_params)
+  tasks = []
+
+  model = Wav2VecASR(Wav2VecASRParams())
   loss = Wav2VecASRLoss()
-  tasks = [Task(model, loss, lr, weight_decay, 'asr')]
+  tasks.append(Task(model, loss, lr, weight_decay, 'asr'))
+
+  model = Wav2VecID(Wav2VecIDParams())
+  loss = Wav2VecIDLoss()
+  tasks.append(Task(model, loss, lr, weight_decay, 'id'))
+
+  model = Tacotron2(TacotronParams())
+  loss = Tacotron2Loss()
+  tasks.append(Task(model, loss, lr, weight_decay, 'tts'))
 
   multitask_model = AccentedMultiTaskNetwork(multitask_params, tasks, lr=lr, weight_decay=weight_decay)
   trainer = Trainer(logger=wandb_logger, callbacks=[checkpoint_callback])
   trainer.fit(multitask_model, train_loader, val_loader)
 
 if __name__ == "__main__":
-  train_loader, val_loader, collate_fn = load_data(TrainingParams, DataParams)
-  train(TrainingParams, MultiTaskParams, Wav2VecASRParams, train_loader, val_loader)
+  train_loader, val_loader, collate_fn = load_data(TrainingParams(), DataParams())
+  train(TrainingParams(), MultiTaskParams(), train_loader, val_loader)

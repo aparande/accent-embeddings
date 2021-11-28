@@ -34,7 +34,7 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
 
   def get_wav2vec_features(self, batch):
     input_values = batch["wav2vec_input"]
-    outputs = self.wav2vec_model(input_values[0]).last_hidden_state
+    outputs = self.wav2vec_model(input_values).last_hidden_state
     batch["wav2vec_hidden"] = outputs
     return torch.mean(outputs, 1)
 

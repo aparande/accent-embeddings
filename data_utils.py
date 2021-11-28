@@ -343,7 +343,7 @@ class IDCollate():
   def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
     batch = {}
     label_features = [feature["accent"].unsqueeze(0) for feature in features]
-    batch["id_accents"] = torch.cat(label_features)
+    batch["accents"] = torch.cat(label_features)
     return batch
 
 class Collate():
