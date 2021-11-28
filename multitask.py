@@ -60,9 +60,7 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
 
       loss_vals.append(task.loss(y_pred, targets))
 
-    total_loss = loss_vals[0]
-    for val in loss_vals[1:]:
-      total_loss += val
+    total_loss = sum(loss_vals)
 
     for task, loss_val in zip(self.tasks, loss_vals):
       self.log(f"train_loss_{task.name}", loss_val)
@@ -83,9 +81,7 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
 
       loss_vals.append(task.loss(y_pred, targets))
 
-    total_loss = loss_vals[0]
-    for val in loss_vals[1:]:
-      total_loss += val
+    total_loss = sum(loss_vals)
 
     for task, loss_val in zip(self.tasks, loss_vals):
       self.log(f"val_loss_{task.name}", loss_val)
