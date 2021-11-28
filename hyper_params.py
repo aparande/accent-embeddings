@@ -102,7 +102,7 @@ class Wav2VecIDParams:
 
 @dataclass
 class MultiTaskParams:
+  hidden_dim: List[int]
   in_dim: int = 1024
   out_dim: int = 13
-  hidden_dim: List[int]
   wav2vec: str = "facebook/wav2vec2-large-960h"
