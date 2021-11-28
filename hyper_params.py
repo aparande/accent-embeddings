@@ -18,13 +18,12 @@ class TrainingParams:
 
 @dataclass
 class DataParams:
-  filter_length: int = 2048
-  hop_length: int = 256
-  win_length: int = 1024
+  filter_length: int = 800
+  hop_length: int = 200
+  win_length: int = 800
   n_mel_channels: int = 80
   fmin: float = 0.0
   fmax: float = 8000.0
-  # sample_rate: float = 48000
   orig_rate: float = 48000
   sample_rate: float = 16000
   speaker: str = None
@@ -104,6 +103,6 @@ class Wav2VecIDParams:
 @dataclass
 class MultiTaskParams:
   in_dim: int = 1024
-  out_dim: int = 5
-  hidden_dim: List[int] = field(default_factory=list)
+  out_dim: int = 13
+  hidden_dim: List[int]
   wav2vec: str = "facebook/wav2vec2-large-960h"
