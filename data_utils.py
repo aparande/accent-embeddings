@@ -26,7 +26,7 @@ class VCTK(Dataset):
   A base class for VCTK based datasets.
   Based on VCTK_092 from https://pytorch.org/audio/stable/_modules/torchaudio/datasets/vctk.html
   """
-  def __init__(self, params: DataParams, precompute_features: bool = False, root: str = DATASET_PATH, mic_id: str = "mic2", audio_ext: str = ".flac"):
+  def __init__(self, params: DataParams, precompute_features: bool = True, root: str = DATASET_PATH, mic_id: str = "mic2", audio_ext: str = ".flac"):
     self.mfcc_transform = transforms.MelSpectrogram(sample_rate=params.sample_rate, n_mels=params.n_mel_channels,
                                                     f_min=params.fmin, f_max=params.fmax, win_length=params.win_length,
                                                     hop_length=params.hop_length, n_fft=params.filter_length)

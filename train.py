@@ -15,8 +15,8 @@ from pytorch_lightning.loggers import WandbLogger
 from hyper_params import TrainingParams, DataParams, MultiTaskParams, Wav2VecASRParams
 
 
-def load_data(params: TrainingParams, data_params: DataParams):
-  dataset = VCTK(data_params)
+def load_data(params: TrainingParams, data_params: DataParams, precompute_features=True):
+  dataset = VCTK(data_params, precompute_features=True)
   collate_fn = Collate()
 
   val_size = int(params.val_size * len(dataset))
