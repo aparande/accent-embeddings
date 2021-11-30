@@ -13,6 +13,7 @@ class Task(NamedTuple):
   loss: nn.Module
   learning_rate: float
   weight_decay: float
+  loss_weight: float
   name: str
 
 class AccentedMultiTaskNetwork(pl.LightningModule):
@@ -58,7 +59,7 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
       y_pred = task.model.training_step(x, accent_embed)
       targets = task.model.get_targets(batch)
 
-      loss_vals.append(task.loss(y_pred, targets))
+      loss_vals.append(task.loss_weight * task.loss(y_pred, targets))
 
     total_loss = sum(loss_vals)
 
@@ -79,7 +80,7 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
 
       targets = task.model.get_targets(batch)
 
-      loss_vals.append(task.loss(y_pred, targets))
+      loss_vals.append(task.loss_weight * task.loss(y_pred, targets))
 
     total_loss = sum(loss_vals)
 
