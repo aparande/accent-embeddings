@@ -1,9 +1,10 @@
-from typing import NamedTuple, List
+from typing import NamedTuple, List, Callable
 import torch
 from torch import nn
 import torch.nn.functional as F
 from transformers import Wav2Vec2Processor, Wav2Vec2Model
 import pytorch_lightning as pl
+from collections import defaultdict
 
 from hyper_params import MultiTaskParams
 from utils import build_mlp
@@ -15,6 +16,7 @@ class Task(NamedTuple):
   weight_decay: float
   loss_weight: float
   name: str
+  metrics: List[Callable]
 
 class AccentedMultiTaskNetwork(pl.LightningModule):
   def __init__(self, params: MultiTaskParams, tasks: [Task], lr=1e-3, weight_decay=0.0):
@@ -72,6 +74,7 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
   def validation_step(self, batch, batch_idx):
     wav2vec_feats = self.get_wav2vec_features(batch)
     accent_embed = self.bottleneck(wav2vec_feats)
+    val_out = {}
 
     loss_vals = []
     for task in self.tasks:
@@ -79,6 +82,8 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
       y_pred = task.model(x, accent_embed)
 
       targets = task.model.get_targets(batch)
+
+      val_out[task.name] = (y_pred, targets)
 
       loss_vals.append(task.loss_weight * task.loss(y_pred, targets))
 
@@ -88,6 +93,22 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
       self.log(f"val_loss_{task.name}", loss_val)
 
     self.log("val_loss", total_loss)
+    return val_out
+
+  def validation_epoch_end(self, val_outs):
+    preds_dict = { task.name : [] for task in self.tasks }
+    targets_dict = { task.name : [] for task in self.tasks }
+    for batch_out in val_outs:
+      for task_name in batch_out:
+        y_pred, target = batch_out[task_name]
+        preds_dict[task_name].append(y_pred)
+        targets_dict[task_name].append(target)
+
+    for task in self.tasks:
+      y_preds = torch.cat(preds_dict[task.name])
+      targets = torch.cat(targets_dict[task.name])
+      for metric in task.metrics:
+        self.log(f"{metric.name}_on_{task.name}", metric(y_preds, targets))
 
   def configure_optimizers(self):
     optim_args = [ {
