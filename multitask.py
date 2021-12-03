@@ -29,8 +29,7 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
     self.models = nn.ModuleList([task.model for task in self.tasks])
     self.wav2vec_model = Wav2Vec2Model.from_pretrained(params.wav2vec)
 
-    for param in self.wav2vec_model.parameters():
-      param.requires_grad = False
+    self.wav2vec_model.feature_extractor._freeze_parameters()
 
     self.lr = lr
     self.weight_decay = weight_decay
