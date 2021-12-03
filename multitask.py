@@ -96,15 +96,17 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
     return val_out
 
   def validation_epoch_end(self, val_outs):
-    val_outs_by_task = {task.name: ([], []) for task in self.tasks}
-    for task_name, val_out in val_outs:
-      y_pred, target = val_out
-      val_outs_by_task[task_name][0].append(y_pred)
-      val_outs_by_task[task_name][1].append(target)
+    preds_dict = { task.name : [] for task in self.tasks }
+    targets_dict = { task.name : [] for task in self.tasks }
+    for batch_out in val_outs:
+      for task_name in batch_out:
+        y_pred, target = batch_out[task_name]
+        preds_dict[task_name].append(y_pred)
+        targets_dict[task_name].append(target)
 
     for task in self.tasks:
-      y_preds = torch.cat(val_outs_by_task[task.name][0])
-      targets = torch.cat(val_outs_by_task[task.name][1])
+      y_preds = torch.cat(preds_dict[task.name])
+      targets = torch.cat(targets_dict[task.name])
       for metric in task.metrics:
         self.log(f"{metric.name}_on_{task.name}", metric(y_preds, targets))
 
