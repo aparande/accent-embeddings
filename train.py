@@ -13,6 +13,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 
 from hyper_params import *
+from metrics import *
 
 
 def load_data(params: TrainingParams, data_params: DataParams, precompute_features=True):
@@ -30,29 +31,29 @@ def load_data(params: TrainingParams, data_params: DataParams, precompute_featur
 def train():
   tp = TrainingParams(val_size=0.1)
   dp = DataParams(filter_length=800, sample_rate=16000, win_length=800, hop_length=200)
-  mp = MultiTaskParams(hidden_dim=[], in_dim=1024)
+  mp = MultiTaskParams(hidden_dim=[13], in_dim=1024)
 
   train_loader, val_loader = load_data(tp, dp)
   checkpoint_callback = ModelCheckpoint(monitor="val_loss", dirpath=".", filename=tp.model_path, save_top_k=1)
   wandb_logger = WandbLogger(name=tp.run_name, project="accent_embeddings")
 
-
   tacotron = Tacotron2(TacotronParams())
   tacotron_loss = Tacotron2Loss()
-  tts_task = Task(model=tacotron, loss=tacotron_loss, learning_rate=1e-3, weight_decay=1e-6, name='TTS', loss_weight=0.5)
+  tts_task = Task(model=tacotron, loss=tacotron_loss, learning_rate=1e-3, weight_decay=1e-6, name='TTS', loss_weight=0.5, metrics=[MSE()])
 
   asr = Wav2VecASR(Wav2VecASRParams())
   asr_loss = Wav2VecASRLoss()
-  asr_task = Task(model=asr, loss=asr_loss, learning_rate=1e-5, weight_decay=0, name='ASR', loss_weight=0.5)
+  asr_task = Task(model=asr, loss=asr_loss, learning_rate=1e-5, weight_decay=0, name='ASR', loss_weight=0.5, metrics=[WERAccuracy()])
 
   accent_id = Wav2VecID(Wav2VecIDParams())
   accent_id_loss = Wav2VecIDLoss()
-  accent_id_task = Task(model=accent_id, loss=accent_id_loss, learning_rate=1e-5, weight_decay=0, name='ID', loss_weight=2)
+  accent_id_task = Task(model=accent_id, loss=accent_id_loss, learning_rate=1e-5, weight_decay=0, name='ID', loss_weight=2, metrics=[SoftmaxAccuracy()])
 
   model = AccentedMultiTaskNetwork(mp, [accent_id_task, tts_task, asr_task])
 
   trainer = Trainer(gradient_clip_val=tp.grad_clip_thresh, max_epochs=tp.epochs, gpus=1, logger=wandb_logger, accumulate_grad_batches=tp.accumulate, callbacks=[checkpoint_callback])
   trainer.fit(model, train_loader, val_loader)
+  # trainer.validate(model=model, dataloaders=val_loader)
 
 
 if __name__ == "__main__":

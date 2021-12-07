@@ -108,8 +108,7 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
         targets_dict[task_name].append(target)
 
     for task in self.tasks:
-      y_preds = torch.cat(preds_dict[task.name])
-      targets = torch.cat(targets_dict[task.name])
+      y_preds, targets = preds_dict[task.name], targets_dict[task.name]
       for metric in task.metrics:
         self.log(f"{metric.name}_on_{task.name}", metric(y_preds, targets))
 

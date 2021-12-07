@@ -10,12 +10,12 @@ class Tacotron2Loss(nn.Module):
 		super(Tacotron2Loss, self).__init__()
 
 	def forward(self, model_output, targets):
-		mel_target, gate_target = targets[0], targets[1]
+		mel_target, gate_target = targets["mfcc"], targets["gates"]
 		mel_target.requires_grad = False
 		gate_target.requires_grad = False
 		gate_target = gate_target.view(-1, 1)
 
-		mel_out, mel_out_postnet, gate_out, _ = model_output
+		mel_out, mel_out_postnet, gate_out = model_output["mel_out"], model_output["mel_out_postnet"], model_output["gate_out"]
 		gate_out = gate_out.view(-1, 1)
 		mel_loss = nn.MSELoss()(mel_out, mel_target) + \
 				nn.MSELoss()(mel_out_postnet, mel_target)
@@ -531,7 +531,7 @@ class Tacotron2(nn.Module):
         return text, text_lens, mfccs, max_len, mfcc_lengths
 
     def get_targets(self, batch):
-      return batch["mfcc"], batch["gates"]
+      return { "mfcc": batch["mfcc"], "gates": batch["gates"] } 
 
     def parse_output(self, outputs, output_lengths=None):
         if self.mask_padding and output_lengths is not None:
@@ -543,7 +543,12 @@ class Tacotron2(nn.Module):
             outputs[1].data.masked_fill_(mask, 0.0)
             outputs[2].data.masked_fill_(mask[:, 0, :], 1e3)  # gate energies
 
-        return outputs
+        return {
+            "mel_out": outputs[0],
+            "mel_out_postnet": outputs[1],
+            "gate_out": outputs[2],
+            "alignments": outputs[3]
+          }
 
     def forward(self, inputs, accent_embed):
         if type(inputs) != torch.Tensor:
