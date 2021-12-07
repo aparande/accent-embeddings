@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 
-from abs import ABC, abstractmethod
+from abc import ABC, abstractmethod
 
 class Metric(ABC):
   def __init__(self, name):
