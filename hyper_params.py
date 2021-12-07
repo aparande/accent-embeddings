@@ -5,16 +5,18 @@ import hashlib
 
 @dataclass
 class TrainingParams:
-  epochs: int = 30
-  learning_rate: float = 1e-7
+  epochs: int = 60
+  learning_rate: float = 1e-5
   weight_decay: float = 0
-  grad_clip_thresh: float = 1.0
-  batch_size: float = 16
+  grad_clip_thresh: float = 0
+  batch_size: float = 8
+  accumulate: float = 8
   report_interval: int = 5
   save_interval: int = 100
   random_seed: int = 42
   val_size: float = 0.1
-  model_path: str = "best.ckpt"
+  run_name: str = "no_grad_clip"
+  model_path: str = "runs/no_grad_clip"
 
 @dataclass
 class DataParams:
@@ -106,3 +108,5 @@ class MultiTaskParams:
   in_dim: int = 1024
   out_dim: int = 13
   wav2vec: str = "facebook/wav2vec2-large-960h"
+  wav2vec_learning_rate: float = 1e-7
+  wav2vec_freeze_feature_extractor: bool = True

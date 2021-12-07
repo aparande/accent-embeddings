@@ -54,7 +54,7 @@ class VCTK(Dataset):
       raise RuntimeError("Dataset not found. Please download it from https://datashare.ed.ac.uk/handle/10283/2950")
 
     # Extracting speaker IDs from the folder structure
-    self._speaker_ids = sorted(os.listdir(self._txt_dir)) if self.params.speaker is None else [self.params.speaker]
+    self._speaker_ids = sorted(os.listdir(self._txt_dir)) if self.params.speaker is None else self.params.speaker
     self._sample_ids = []
 
     for speaker_id in self._speaker_ids:
@@ -77,6 +77,7 @@ class VCTK(Dataset):
     lengths = self._load_audio_lens()
     valid_samples = set([sample for sample in lengths if lengths[tuple(sample)] < params.max_sec])
     self._sample_ids = [sample for sample in self._sample_ids if tuple(sample) in valid_samples]
+    print("Number of samples: ", len(self._sample_ids))
 
   def _precompute(self) -> None:
     if not os.path.exists(self._audio_dir):

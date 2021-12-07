@@ -29,7 +29,11 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
     self.models = nn.ModuleList([task.model for task in self.tasks])
     self.wav2vec_model = Wav2Vec2Model.from_pretrained(params.wav2vec)
 
-    self.wav2vec_model.feature_extractor._freeze_parameters()
+    if self.params.wav2vec_freeze_feature_extractor:
+      self.wav2vec_model.feature_extractor._freeze_parameters()
+
+    # for param in self.wav2vec_model.parameters():
+    #   param.requires_grad = False
 
     self.lr = lr
     self.weight_decay = weight_decay
@@ -115,6 +119,10 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
       "lr": task.learning_rate,
       "weight_decay": task.weight_decay
     } for task in self.tasks ]
+    optim_args.append( {
+      "params" : self.wav2vec_model.parameters(),
+      "lr": self.params.wav2vec_learning_rate
+    } )
     optim_args.append( { "params" : self.bottleneck.parameters() } )
     return torch.optim.Adam(optim_args, lr=self.lr, weight_decay=self.weight_decay)
 
