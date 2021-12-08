@@ -12,8 +12,7 @@ from utils import build_mlp
 class Task(NamedTuple):
   model: nn.Module
   loss: nn.Module
-  learning_rate: float
-  weight_decay: float
+  learning_rate: float weight_decay: float
   loss_weight: float
   name: str
   metrics: List[Callable]
@@ -110,16 +109,16 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
     return val_out
 
   def training_epoch_end(self, train_outs):
-    epoch += 1
+    self.epoch += 1
 
-    if (epoch + 1) % self.params.alternate_epoch_interval == 0:
+    if (self.epoch + 1) % self.params.alternate_epoch_interval == 0:
       print(f"Turning off {self.tasks[self.task_idx].name}")
       for param in self.tasks[self.task_idx].model.parameters():
         param.requires_grad = False
 
-      self.task_idx += 1
+      self.task_idx = (self.task_idx + 1) % len(self.tasks)
 
-      print(f"Turning on {self.tasks[i].name}")
+      print(f"Turning on {self.tasks[self.task_idx].name}")
       for param in self.tasks[self.task_idx].model.parameters():
         param.requires_grad = True
 
