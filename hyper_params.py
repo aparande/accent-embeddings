@@ -110,3 +110,7 @@ class MultiTaskParams:
   wav2vec: str = "facebook/wav2vec2-large-960h"
   wav2vec_learning_rate: float = 1e-7
   wav2vec_freeze_feature_extractor: bool = True
+
+  # Set to 0 for no alternate training
+  alternate_epoch_interval: int = 1
+
