@@ -41,6 +41,11 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
     self.task_idx = 0
     self.epoch = 0
 
+    self.iteration = 0
+    self.loss_history = np.zeros((len(self.tasks), 2))
+    self.loss_weights = [task.loss_weight for task in self.tasks]
+
+
   def get_accent_embed(self, batch):
     input_values = batch["wav2vec_input"]
     outputs = self.wav2vec_model(input_values).last_hidden_state
@@ -65,6 +70,7 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
     return outs
 
   def training_step(self, batch, batch_idx):
+    self.iteration += 1
     wav2vec_feats = self.get_wav2vec_features(batch)
     accent_embed = self.bottleneck(wav2vec_feats)
     loss_vals = []
@@ -82,14 +88,29 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
         y_pred = task.model.training_step(x, accent_embed)
         targets = task.model.get_targets(batch)
 
-        loss_vals.append(task.loss_weight * task.loss(y_pred, targets))
+        loss_vals.append(task.loss(y_pred, targets))
+
+      for i, loss in enumerate(loss_vals):
+        self.loss_history[i, 0], self.loss_history[i, 1] = loss.item(), self.loss_history[i, 0]
+
+      if self.params.loss_weighting_strategy == "dwa":
+        weights = F.softmax(torch.from_numpy(self.loss_weights)).numpy()
+      else:
+        weights = self.loss_weights
+
+      loss_vals = [weight * val for weight, val in zip(weights, loss_vals)]
 
     total_loss = sum(loss_vals)
 
-    for task, loss_val in zip(self.tasks, loss_vals):
+    if self.iteration >= 2 and self.params.loss_weighting_strategy == "dwa":
+      self.loss_weights = self.loss_history[:, 0] / self.loss_history[:, 1]
+
+    for task, loss_val, w in zip(self.tasks, loss_vals, weights):
       self.log(f"train_loss_{task.name}", loss_val)
+      self.log(f"loss_weight_{task.name}", w)
 
     self.log("train_loss", total_loss)
+
     return total_loss
 
   def validation_step(self, batch, batch_idx):
@@ -98,7 +119,7 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
     val_out = {}
 
     loss_vals = []
-    for task in self.tasks:
+    for task, weight in enumerate(self.tasks, self.loss_weights):
       x = task.model.parse_batch(batch)
       y_pred = task.model(x, accent_embed)
 
@@ -106,7 +127,7 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
 
       val_out[task.name] = (y_pred, targets)
 
-      loss_vals.append(task.loss_weight * task.loss(y_pred, targets))
+      loss_vals.append(weight * task.loss(y_pred, targets))
 
     total_loss = sum(loss_vals)
 
