@@ -12,7 +12,8 @@ from utils import build_mlp
 class Task(NamedTuple):
   model: nn.Module
   loss: nn.Module
-  learning_rate: float weight_decay: float
+  learning_rate: float 
+  weight_decay: float
   loss_weight: float
   name: str
   metrics: List[Callable]
