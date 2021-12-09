@@ -43,7 +43,7 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
 
     self.iteration = 0
     self.loss_history = np.zeros((len(self.tasks), 2))
-    self.loss_weights = [task.loss_weight for task in self.tasks]
+    self.loss_weights = np.array([task.loss_weight for task in self.tasks])
 
 
   def get_accent_embed(self, batch):
@@ -119,7 +119,13 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
     val_out = {}
 
     loss_vals = []
-    for task, weight in enumerate(self.tasks, self.loss_weights):
+
+    if self.params.loss_weighting_strategy == "dwa":
+      weights = F.softmax(torch.from_numpy(self.loss_weights)).numpy()
+    else:
+      weights = self.loss_weights
+
+    for task, weight in zip(self.tasks, weights):
       x = task.model.parse_batch(batch)
       y_pred = task.model(x, accent_embed)
 
