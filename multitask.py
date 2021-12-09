@@ -70,12 +70,21 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
     wav2vec_feats = self.get_wav2vec_features(batch)
     accent_embed = self.bottleneck(wav2vec_feats)
     loss_vals = []
-    for task in self.tasks:
+
+    if self.params.alternate_epoch_interval > 0:
+      task == self.tasks[self.task_idx]
       x = task.model.parse_batch(batch, train=True)
       y_pred = task.model.training_step(x, accent_embed)
       targets = task.model.get_targets(batch)
 
-      loss_vals.append(task.loss_weight * task.loss(y_pred, targets))
+      loss_vals.append(task.loss(y_pred, targets))
+    else:
+      for task in self.tasks:
+        x = task.model.parse_batch(batch, train=True)
+        y_pred = task.model.training_step(x, accent_embed)
+        targets = task.model.get_targets(batch)
+
+        loss_vals.append(task.loss_weight * task.loss(y_pred, targets))
 
     total_loss = sum(loss_vals)
 
@@ -114,14 +123,8 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
 
     if self.params.alternate_epoch_interval > 0 and (self.epoch + 1) % self.params.alternate_epoch_interval == 0:
       print(f"Turning off {self.tasks[self.task_idx].name}")
-      for param in self.tasks[self.task_idx].model.parameters():
-        param.requires_grad = False
-
       self.task_idx = (self.task_idx + 1) % len(self.tasks)
-
       print(f"Turning on {self.tasks[self.task_idx].name}")
-      for param in self.tasks[self.task_idx].model.parameters():
-        param.requires_grad = True
 
   def validation_epoch_end(self, val_outs):
     preds_dict = { task.name : [] for task in self.tasks }
