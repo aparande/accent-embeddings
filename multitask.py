@@ -111,7 +111,7 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
   def training_epoch_end(self, train_outs):
     self.epoch += 1
 
-    if (self.epoch + 1) % self.params.alternate_epoch_interval == 0:
+    if self.params.alternate_epoch_interval > 0 and (self.epoch + 1) % self.params.alternate_epoch_interval == 0:
       print(f"Turning off {self.tasks[self.task_idx].name}")
       for param in self.tasks[self.task_idx].model.parameters():
         param.requires_grad = False
