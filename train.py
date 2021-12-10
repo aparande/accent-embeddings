@@ -35,7 +35,7 @@ def train():
 
   train_loader, val_loader = load_data(tp, dp)
   checkpoint_callback = ModelCheckpoint(monitor="val_loss", dirpath=".", filename=tp.model_path, save_top_k=1)
-  wandb_logger = WandbLogger(name=tp.run_name, project="accent_embeddings")
+  wandb_logger = WandbLogger(name=tp.run_name, project="accent_embeddings", log_model="all")
 
   tacotron = Tacotron2(TacotronParams())
   tacotron_loss = Tacotron2Loss()
@@ -49,7 +49,7 @@ def train():
   accent_id_loss = Wav2VecIDLoss()
   accent_id_task = Task(model=accent_id, loss=accent_id_loss, learning_rate=1e-5, weight_decay=0, name='ID', loss_weight=2, metrics=[SoftmaxAccuracy()])
 
-  model = AccentedMultiTaskNetwork(mp, [accent_id_task, tts_task, asr_task])
+  model = AccentedMultiTaskNetwork(mp, [accent_id_task, asr_task, tts_task], learning_rate=tp.learning_rate)
 
   trainer = Trainer(gradient_clip_val=tp.grad_clip_thresh, max_epochs=tp.epochs, gpus=1, logger=wandb_logger, accumulate_grad_batches=tp.accumulate, callbacks=[checkpoint_callback])
   trainer.fit(model, train_loader, val_loader)
