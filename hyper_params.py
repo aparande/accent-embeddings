@@ -6,17 +6,17 @@ import hashlib
 @dataclass
 class TrainingParams:
   epochs: int = 60
-  learning_rate: float = 1e-5
+  learning_rate: float = 1e-7
   weight_decay: float = 0
-  grad_clip_thresh: float = 0
+  grad_clip_thresh: float = 1.0
   batch_size: float = 8
   accumulate: float = 8
   report_interval: int = 5
   save_interval: int = 100
   random_seed: int = 42
   val_size: float = 0.1
-  run_name: str = "no_grad_clip"
-  model_path: str = "runs/no_grad_clip"
+  run_name: str = "all_init_id_v3"
+  model_path: str = "runs/all_init_id_v3"
 
 @dataclass
 class DataParams:
@@ -112,5 +112,5 @@ class MultiTaskParams:
   wav2vec_freeze_feature_extractor: bool = True
 
   # Set to 0 for no alternate training
-  alternate_epoch_interval: int = 1
+  alternate_epoch_interval: int = 0
 
