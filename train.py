@@ -49,7 +49,8 @@ def train():
   accent_id_loss = Wav2VecIDLoss()
   accent_id_task = Task(model=accent_id, loss=accent_id_loss, learning_rate=1e-5, weight_decay=0, name='ID', loss_weight=2, metrics=[SoftmaxAccuracy()])
 
-  model = AccentedMultiTaskNetwork(mp, [accent_id_task, asr_task, tts_task], learning_rate=tp.learning_rate)
+  model = AccentedMultiTaskNetwork(mp, [accent_id_task, asr_task, tts_task], lr=tp.learning_rate)
+  # model.load_state_dict(torch.load("/shared/g-luo/vctk/models/freeze_feat_extractor.ckpt"), strict=False)
 
   trainer = Trainer(gradient_clip_val=tp.grad_clip_thresh, max_epochs=tp.epochs, gpus=1, logger=wandb_logger, accumulate_grad_batches=tp.accumulate, callbacks=[checkpoint_callback])
   trainer.fit(model, train_loader, val_loader)

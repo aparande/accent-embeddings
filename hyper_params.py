@@ -15,8 +15,8 @@ class TrainingParams:
   save_interval: int = 100
   random_seed: int = 42
   val_size: float = 0.1
-  run_name: str = "all_init_id_v3"
-  model_path: str = "runs/all_init_id_v3"
+  run_name: str = "example"
+  model_path: str = "runs/example"
 
 @dataclass
 class DataParams:
