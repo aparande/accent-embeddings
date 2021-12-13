@@ -111,12 +111,12 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
     return val_out
 
   def training_epoch_end(self, train_outs):
-    self.epoch += 1
-
     if self.params.alternate_epoch_interval > 0 and (self.epoch + 1) % self.params.alternate_epoch_interval == 0:
       print(f"Turning off {self.tasks[self.task_idx].name}")
       self.task_idx = (self.task_idx + 1) % len(self.tasks)
       print(f"Turning on {self.tasks[self.task_idx].name}")
+    self.epoch += 1
+
 
   def validation_epoch_end(self, val_outs):
     preds_dict = { task.name : [] for task in self.tasks }
