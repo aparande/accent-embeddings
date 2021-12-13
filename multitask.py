@@ -41,14 +41,6 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
     self.task_idx = 0
     self.epoch = 0
 
-    if self.params.alternate_epoch_interval > 0:
-      for i in range(len(self.tasks)):
-        if i == 0:
-          continue
-        print(f"Turning off {self.tasks[i].name}")
-        for param in self.tasks[i].model.parameters():
-          param.requires_grad = False
-
   def get_wav2vec_features(self, batch):
     input_values = batch["wav2vec_input"]
     outputs = self.wav2vec_model(input_values).last_hidden_state
@@ -72,7 +64,7 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
     loss_vals = []
 
     if self.params.alternate_epoch_interval > 0:
-      task == self.tasks[self.task_idx]
+      task = self.tasks[self.task_idx]
       x = task.model.parse_batch(batch, train=True)
       y_pred = task.model.training_step(x, accent_embed)
       targets = task.model.get_targets(batch)
