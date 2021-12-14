@@ -114,3 +114,6 @@ class MultiTaskParams:
   # Set to 0 for no alternate training
   alternate_epoch_interval: int = 0
 
+  # manual, dwa
+  loss_weighting_strategy: str = "dwa"
+
