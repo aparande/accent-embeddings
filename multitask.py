@@ -122,7 +122,7 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
     loss_vals = []
 
     if self.params.loss_weighting_strategy == "dwa":
-      weights = F.softmax(torch.from_numpy(self.loss_weights)).numpy()
+      weights = F.softmax(torch.from_numpy(self.loss_weights), dim=0).numpy()
     else:
       weights = self.loss_weights
 
