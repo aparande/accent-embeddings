@@ -41,6 +41,12 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
     self.task_idx = 0
     self.epoch = 0
 
+  def get_accent_embed(self, batch):
+    input_values = batch["wav2vec_input"]
+    outputs = self.wav2vec_model(input_values).last_hidden_state
+    outputs = torch.mean(outputs, 1)
+    return self.bottleneck(outputs)
+
   def get_wav2vec_features(self, batch):
     input_values = batch["wav2vec_input"]
     outputs = self.wav2vec_model(input_values).last_hidden_state
