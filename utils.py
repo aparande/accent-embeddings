@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
+import librosa
 
 def get_mask_from_lengths(lengths):
   max_len = torch.max(lengths).item()
@@ -25,3 +26,9 @@ def build_mlp(dims):
 
   layers.append(nn.Linear(dims[-2], dims[-1]))
   return nn.Sequential(*layers)
+
+def log_mel_spec_to_audio(mel_spec, dp):
+  mel_spec = np.exp(mel_spec)
+  gl_audio = librosa.feature.inverse.mel_to_audio(mel_spec, n_fft=dp.filter_length, hop_length=dp.hop_length, win_length=dp.win_length, fmin=dp.fmin, fmax=dp.fmax)
+
+  return gl_audio
