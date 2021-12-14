@@ -1,5 +1,6 @@
 import os
 from tqdm import tqdm
+import json
 import torch
 from torch.utils.data import DataLoader, random_split
 from data_utils import VCTK, Collate
@@ -28,14 +29,34 @@ def load_data(params: TrainingParams, data_params: DataParams, precompute_featur
   val_loader = DataLoader(val, batch_size=params.batch_size, shuffle=False, collate_fn=collate_fn)
   return train_loader, val_loader
 
-def train():
+def predict(model, val_loader, device="cuda"):
+    model = model.to(device)
+    predictions = {task: [] for task in ["ASR", "ID", "TTS"]}
+    for batch in tqdm(val_loader):
+      for k in batch:
+        try:
+          batch[k] = batch[k].to(device)
+        except:
+          continue
+      result = model(batch)
+      for k in result:
+        for i in range(result[k].shape[0]):
+            prediction = {
+              "speaker_id": batch["speaker_id"][i], 
+              "utterance_id": batch["utterance_id"][i], 
+              "prediction": result[k][i].detach().cpu().numpy().tolist(),
+            }
+            predictions[k].append(prediction)
+    json.dump(predictions, open("predictions.json", "w"))
+
+def train(predict=False):
   tp = TrainingParams(val_size=0.1)
   dp = DataParams(filter_length=800, sample_rate=16000, win_length=800, hop_length=200)
   mp = MultiTaskParams(hidden_dim=[13], in_dim=1024)
 
   train_loader, val_loader = load_data(tp, dp)
   checkpoint_callback = ModelCheckpoint(monitor="val_loss", dirpath=".", filename=tp.model_path, save_top_k=1)
-  wandb_logger = WandbLogger(name=tp.run_name, project="accent_embeddings", log_model="all")
+  wandb_logger = WandbLogger(name=tp.run_name, project="accent_embeddings")
 
   tacotron = Tacotron2(TacotronParams())
   tacotron_loss = Tacotron2Loss()
@@ -49,11 +70,18 @@ def train():
   accent_id_loss = Wav2VecIDLoss()
   accent_id_task = Task(model=accent_id, loss=accent_id_loss, learning_rate=1e-5, weight_decay=0, name='ID', loss_weight=2, metrics=[SoftmaxAccuracy()])
 
-  model = AccentedMultiTaskNetwork(mp, [accent_id_task, asr_task, tts_task], learning_rate=tp.learning_rate)
+  # asr_task, tts_task
+  model = AccentedMultiTaskNetwork(mp, [accent_id_task], lr=tp.learning_rate)
+  # model.load_state_dict(torch.load("runs/v0/freeze_feat_extractor.ckpt"), strict=False)
 
-  trainer = Trainer(gradient_clip_val=tp.grad_clip_thresh, max_epochs=tp.epochs, gpus=1, logger=wandb_logger, accumulate_grad_batches=tp.accumulate, callbacks=[checkpoint_callback])
-  trainer.fit(model, train_loader, val_loader)
-  # trainer.validate(model=model, dataloaders=val_loader)
+  if predict:
+    model.load_state_dict(torch.load(tp.model_path), strict=False)
+    predict(model, val_loader)
+
+  else:
+    trainer = Trainer(gradient_clip_val=tp.grad_clip_thresh, max_epochs=tp.epochs, gpus=1, logger=wandb_logger, accumulate_grad_batches=tp.accumulate, callbacks=[checkpoint_callback])
+    # trainer.fit(model, train_loader, val_loader)
+    trainer.validate(model=model, dataloaders=val_loader)
 
 
 if __name__ == "__main__":
