@@ -253,7 +253,7 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
         self.n_mel_channels = hparams.n_mel_channels
         self.n_frames_per_step = hparams.n_frames_per_step
-        self.encoder_embedding_dim = hparams.encoder_embedding_dim
+        self.encoder_embedding_dim = hparams.encoder_embedding_dim + hparams.accent_embed_dim
         self.attention_rnn_dim = hparams.attention_rnn_dim
         self.decoder_rnn_dim = hparams.decoder_rnn_dim
         self.prenet_dim = hparams.prenet_dim
@@ -263,28 +263,28 @@ class Decoder(nn.Module):
         self.p_decoder_dropout = hparams.p_decoder_dropout
 
         self.prenet = Prenet(
-            hparams.n_mel_channels * hparams.n_frames_per_step + hparams.accent_embed_dim,
+            hparams.n_mel_channels * hparams.n_frames_per_step,
             [hparams.prenet_dim, hparams.prenet_dim])
 
         self.attention_rnn = nn.LSTMCell(
-            hparams.prenet_dim + hparams.encoder_embedding_dim,
+            hparams.prenet_dim + hparams.encoder_embedding_dim + hparams.accent_embed_dim,
             hparams.attention_rnn_dim)
 
         self.attention_layer = Attention(
-            hparams.attention_rnn_dim, hparams.encoder_embedding_dim,
+            hparams.attention_rnn_dim, hparams.encoder_embedding_dim + hparams.accent_embed_dim,
             hparams.attention_dim, hparams.attention_location_n_filters,
             hparams.attention_location_kernel_size)
 
         self.decoder_rnn = nn.LSTMCell(
-            hparams.attention_rnn_dim + hparams.encoder_embedding_dim,
+            hparams.attention_rnn_dim + hparams.encoder_embedding_dim + hparams.accent_embed_dim,
             hparams.decoder_rnn_dim, 1)
 
         self.linear_projection = LinearNorm(
-            hparams.decoder_rnn_dim + hparams.encoder_embedding_dim,
+            hparams.decoder_rnn_dim + hparams.encoder_embedding_dim + hparams.accent_embed_dim,
             hparams.n_mel_channels * hparams.n_frames_per_step)
 
         self.gate_layer = LinearNorm(
-            hparams.decoder_rnn_dim + hparams.encoder_embedding_dim, 1,
+            hparams.decoder_rnn_dim + hparams.encoder_embedding_dim + hparams.accent_embed_dim, 1,
             bias=True, w_init_gain='sigmoid')
 
     def get_go_frame(self, memory):
@@ -425,7 +425,7 @@ class Decoder(nn.Module):
         gate_prediction = self.gate_layer(decoder_hidden_attention_context)
         return decoder_output, gate_prediction, self.attention_weights
 
-    def forward(self, memory, decoder_inputs, memory_lengths, accent_embed):
+    def forward(self, memory, decoder_inputs, memory_lengths):
         """ Decoder forward pass for training
         PARAMS
         ------
@@ -443,9 +443,6 @@ class Decoder(nn.Module):
         decoder_input = self.get_go_frame(memory).unsqueeze(0)
         decoder_inputs = self.parse_decoder_inputs(decoder_inputs)
         decoder_inputs = torch.cat((decoder_input, decoder_inputs), dim=0)
-
-        accent_embed = accent_embed.unsqueeze(0).expand(decoder_inputs.size(0), -1, -1)
-        decoder_inputs = torch.cat((decoder_inputs, accent_embed), dim=2)
         decoder_inputs = self.prenet(decoder_inputs)
 
         self.initialize_decoder_states(
@@ -465,7 +462,7 @@ class Decoder(nn.Module):
 
         return mel_outputs, gate_outputs, alignments
 
-    def inference(self, memory, accent_embed):
+    def inference(self, memory):
         """ Decoder inference
         PARAMS
         ------
@@ -483,7 +480,6 @@ class Decoder(nn.Module):
 
         mel_outputs, gate_outputs, alignments = [], [], []
         while True:
-            decoder_input = torch.cat((decoder_input, accent_embed), dim=1)
             decoder_input = self.prenet(decoder_input)
             mel_output, gate_output, alignment = self.decode(decoder_input)
 
@@ -557,8 +553,11 @@ class Tacotron2(nn.Module):
         assert accent_embed.size(0) == 1, "Batch inference not possible"
         embedded_inputs = self.embedding(inputs).transpose(1, 2)
         encoder_outputs = self.encoder.inference(embedded_inputs)
+        accent_embed = accent_embed.unsqueeze(1).expand(-1, encoder_outputs.size(1), -1)
+        encoder_outputs = torch.cat((encoder_outputs, accent_embed), dim=2)
+
         mel_outputs, gate_outputs, alignments = self.decoder.inference(
-            encoder_outputs, accent_embed)
+            encoder_outputs)
 
         mel_outputs_postnet = self.postnet(mel_outputs)
         mel_outputs_postnet = mel_outputs + mel_outputs_postnet
@@ -575,9 +574,11 @@ class Tacotron2(nn.Module):
         embedded_inputs = self.embedding(text_inputs).transpose(1, 2)
 
         encoder_outputs = self.encoder(embedded_inputs, text_lengths)
+        accent_embed = accent_embed.unsqueeze(1).expand(-1, encoder_outputs.size(1), -1)
+        encoder_outputs = torch.cat((encoder_outputs, accent_embed), dim=2)
 
         mel_outputs, gate_outputs, alignments = self.decoder(
-            encoder_outputs, mels, text_lengths, accent_embed)
+            encoder_outputs, mels, text_lengths)
 
         mel_outputs_postnet = self.postnet(mel_outputs)
         mel_outputs_postnet = mel_outputs + mel_outputs_postnet
