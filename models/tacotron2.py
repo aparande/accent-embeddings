@@ -528,7 +528,10 @@ class Tacotron2(nn.Module):
         mfccs = batch["mfcc"]
         mfcc_lengths = batch["mfcc_lens"]
 
-        return text, text_lens, mfccs, max_len, mfcc_lengths
+        if train:
+          return text, text_lens, mfccs, max_len, mfcc_lengths
+        else:
+          return text
 
     def get_targets(self, batch):
       return { "mfcc": batch["mfcc"], "gates": batch["gates"] } 

@@ -127,7 +127,7 @@ class AccentedMultiTaskNetwork(pl.LightningModule):
       weights = self.loss_weights
 
     for task, weight in zip(self.tasks, weights):
-      x = task.model.parse_batch(batch)
+      x = task.model.parse_batch(batch, train=True)
       y_pred = task.model(x, accent_embed)
 
       targets = task.model.get_targets(batch)
